@@ -11,6 +11,11 @@
 	* src/interp/modemap.boot: In addDomain, test for the value of
 	$NoValueMode, not for the symbol $NoValueMode.  Avoids the bogus
 	error message "NoValueMode is an unknown mode".
+	* src/interp/compiler.boot: Drop the messages stacked while a
+	statement that compiles is compiled.  When a compilation fails,
+	print one message with the function name and the expressions in
+	Spad syntax, on one line; the internal state only if
+	$comp_fail_dump is set.
 
 2026-10-14  Johannes Grabmeier  <johannes@grabmeier.net>
 
