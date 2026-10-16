@@ -21,6 +21,9 @@
 	number of arguments, no operation for the argument types, type
 	mismatch.  Word the messages like the interpreter, and say "type"
 	instead of "mode".
+	* src/interp/lisplib.boot, src/interp/define.boot: Report an
+	unknown category in the target of a constructor instead of
+	failing with a Lisp error.
 
 2026-10-14  Johannes Grabmeier  <johannes@grabmeier.net>
 

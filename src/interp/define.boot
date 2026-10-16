@@ -343,9 +343,7 @@ compDefineFunctor1(df is ['DEF, form, signature, body],
     target:= first signature'
     e := giveFormalParametersValues(argl, e)
     [ds, ., e] := compMakeCategoryObject(target, e) or
-      sayBrightly '"   cannot produce category object:"
-      pp target
-      userError '"cannot produce category object"
+      stackAndThrow [target, '" is not a valid category"]
 --+ copy needed since slot1 is reset; compMake.. can return a cached vector
     base_shell := COPY_-SEQ ds
     $domainShell : local := base_shell
