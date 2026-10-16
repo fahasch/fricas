@@ -24,6 +24,11 @@
 	* src/interp/lisplib.boot, src/interp/define.boot: Report an
 	unknown category in the target of a constructor instead of
 	failing with a Lisp error.
+	* src/interp/compiler.boot, src/interp/c-util.boot,
+	src/interp/define.boot, src/interp/iterator.boot: Say "type"
+	instead of "mode" and do not name internal functions in the
+	remaining messages and warnings, for loops, exits and multiple
+	assignments among others.
 
 2026-10-14  Johannes Grabmeier  <johannes@grabmeier.net>
 

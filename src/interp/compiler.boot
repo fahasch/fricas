@@ -130,9 +130,12 @@ DEFPARAMETER($comp_fail_dump, false)
 comp_fail_items(msg) ==
     [comp_fail_item(x) for x in (atom(msg) => [msg]; msg)]
 
-source_text(x) ==
+source_text(x) == comp_fail_item(quote_string(x))
+
+-- a string literal x in quotes, to tell it from the text of a message
+quote_string(x) ==
     STRINGP(x) => CONCAT('"_"", x, '"_"")
-    comp_fail_item(x)
+    x
 
 comp_fail_item(x) ==
     PAIRP(x) => formString(x)
@@ -167,7 +170,7 @@ comp_fail_concat(l) ==
 comp_fail_explain(msg) ==
     not(PAIRP(msg)) => nil
     mismatch := #msg = 6 and msg.1 = '" has type "
-    not(mismatch or first(msg) = '"cannot compile") => nil
+    not(mismatch or comp_fail_prefix?('"cannot compile", first(msg))) => nil
     entries := REVERSE($compStack)  -- the innermost first
     null(entries) => nil
     x := first(first(entries))
@@ -179,6 +182,9 @@ comp_fail_explain(msg) ==
     call and (d := comp_fail_diagnosis(call)) => d
     mismatch and EQUAL(x, first(msg)) => [source_text(x), :rest(msg)]
     nil
+
+comp_fail_prefix?(p, s) ==
+    STRINGP(s) and #s >= #p and SUBSTRING(s, 0, #p) = p
 
 -- why x (an expression that failed, in mode m and environment e)
 -- cannot be compiled, or nil if that is not clear
@@ -312,8 +318,8 @@ compLambda(x is ["+->", vl, body], m, e) ==
                  ress := compAtSign(["@", ["+->", arg1, body],
                                   ["Mapping", target, :sig1]], m, e)
                  ress
-             stackAndThrow ['"compLambda: malformed argument list", x]
-        stackAndThrow ['"compLambda: malformed argument list", x]
+             stackAndThrow ['"malformed arguments of +-> in ", x]
+        stackAndThrow ['"malformed arguments of +-> in ", x]
     nil
 
 getFreeList(u, bound, free, e) ==
@@ -389,11 +395,11 @@ compWithMappingMode1(x, m is ["Mapping", m', :sl], oldE, $formalArgList) ==
       vl :=
          IDENTP(vl) => [vl]
          LISTP(vl) and (and/[SYMBOLP(v) for v in vl])=> vl
-         stackAndThrow ['"bad +-> arguments:", vl]
+         stackAndThrow ['"the arguments of +-> must be names, not ", vl]
       $formalArgList := [:vl, :$formalArgList]
       #sl ~= #vl =>
          stackAndThrow [_
-           '"number of arguments to +-> does not match, expected:", #sl]
+           '"+-> has ", #vl, '" arguments, but ", #sl, '" are expected"]
       x := nx
   else
       vl:= take(#sl,$FormalMapVariableList)
@@ -538,8 +544,8 @@ compSymbol(s,m,e) ==
 
 convertOrCroak(T,m) ==
   u:= convert(T,m) => u
-  userError ['"CANNOT CONVERT: ",T.expr,"%l",'" OF MODE: ",T.mode,"%l",
-    '" TO MODE: ",m,"%l"]
+  userError ['"cannot convert a value of type ", formString(T.mode),
+             '" to ", formString(m)]
 
 convert(T,m) ==
   coerce(T,resolve(T.mode,m) or return nil)
@@ -846,9 +852,11 @@ setqMultiple(nameList,val,m,e) ==
         t is ["Record",:l] => [[name,:mode] for [":",name,mode] in l]
         comp(t,$EmptyMode,e) is [.,["RecordCategory",:l],.] =>
           [[name,:mode] for [":",name,mode] in l]
-        stackMessage ['"no multiple assigns to mode: ",t]
+        stackMessage ['"cannot assign a value of type ", t,
+                      '" to several variables"]
   #nameList~=#selectorModePairs =>
-    stackMessage [val,'" must decompose into ",#nameList,'" components"]
+    stackMessage ['"cannot assign ", val, '" to ", #nameList,
+                  '" variables, it has ", #selectorModePairs, '" components"]
   -- 3 generate code; return
   assignList:=
     [([.,.,e]:= compSetq1(x,["elt",g,y],z,e) or return "failed").expr
@@ -858,8 +866,8 @@ setqMultiple(nameList,val,m,e) ==
 
 setqMultipleExplicit(nameList,valList,m,e) ==
   #nameList~=#valList =>
-    stackMessage ['"Multiple assignment error; # of items in: ",nameList,
-      '"must = # in: ",valList]
+    stackMessage ['"cannot assign ", #valList, '" values to ", #nameList,
+                  '" variables"]
   gensymList:= [genVariable() for name in nameList]
   assignList:=
              --should be fixed to declare genVar when possible
@@ -1025,7 +1033,8 @@ compExit(["exit",level,x],m,e) ==
   [x',m',e']:=
     u:=
       comp(x,m1,e) or return
-        stackMessageIfNone ['"cannot compile exit expression",x,'"in mode",m1]
+        stackMessageIfNone ['"cannot compile ", quote_string(x),
+                            '" as a value of type ", m1]
   modifyModeStack(m',index)
   [["TAGGEDexit",index,u],m,e]
 
@@ -1279,7 +1288,8 @@ compPretend(["pretend",x,t],m,e) ==
   T:= comp(x,t,e) or comp(x,$EmptyMode,e) or return nil
   if T.mode=t then warningMessage:= ['"pretend",t,'" -- should replace by @"]
   if opOf(T.mode) = 'Union and opOf(m) ~= 'Union then
-     stackWarning(['"cannot pretend ",x,'" of mode ",T.mode,'" to mode ",m])
+     stackWarning(['"cannot pretend ", formString(x), '" of type ",
+                   formString(T.mode), '" to be of type ", formString(m)])
   T:= [T.expr,t,T.env]
   T':= coerce(T,m) => (if warningMessage then stackWarning warningMessage; T')
 

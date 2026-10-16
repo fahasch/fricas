@@ -182,7 +182,7 @@ intersectionContour(c, c', ce) ==
       pair:= assoc("mode",p) =>
         pair':= assoc("mode",p') =>
           m'' := unifiable(rest pair, rest pair', ce) => LIST ["mode", :m'']
-          stackWarning(['%b,$var,'%d,'"has two modes: "])
+          stackWarning(['%b,$var,'%d,'"has two different types"])
         LIST ["conditionalmode",:rest pair]
         --LIST pair
       pair':= assoc("mode",p') => LIST ["conditionalmode",:rest pair']
@@ -217,8 +217,9 @@ addContour(c,E is [cur,:tail]) ==
                      --check for conflicts with earlier mode
                      if vv:=LASSOC("mode",e) then
                         if v ~=vv then
-                          stackWarning ['"The conditional modes ",
-                                     v,'" and ",vv,'" conflict"]
+                          stackWarning ['"the conditional types ",
+                            formString(v), '" and ", formString(vv),
+                              '" conflict"]
         LIST c
 
 makeCommonEnvironment(e,e') ==
@@ -535,7 +536,8 @@ extendsCategoryForm(domain, form, form', e) ==
                               for x in l]
   form is ["CATEGORY",.,:l] =>
     member(form',l) or
-      stackWarning ['"not known that ",form','" is of mode ",form] or true
+      stackWarning ['"not known that ", formString(form'), '" has ",
+                    formString(form)] or true
   isCategoryForm(form) =>
           --Constructs the associated vector
     formVec := (compMakeCategoryObject(form, e)).expr
