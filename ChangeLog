@@ -41,6 +41,9 @@
 	* src/interp/i-spec1.boot: In an algebraic extension "a | p",
 	report a p of degree 0 in a instead of failing in the library;
 	print the polynomial in Spad form in the messages.
+	* src/doc/sphinx/source/spaderrors.rst,
+	src/doc/sphinx/source/development.rst: New page with common Spad
+	compiler error messages and their remedies.
 
 2026-10-14  Johannes Grabmeier  <johannes@grabmeier.net>
 
