@@ -279,10 +279,16 @@ upAlgExtension t ==
   newmode := objMode T
   (field := resolveTCat(CADDR newmode,'(Field))) or
       throw_msg("S2IS0002",
-                '"Cannot pass to a field from the domain %1pb .", [eq])
+                '"Cannot pass to a field from the domain %1pb .",
+                [unVectorize(eq)])
   pd:= ['UnivariatePolynomial,a,field]
   null (canonicalAE:= coerceInteractive(T,pd)) =>
       throwMsgCannotCoerceWithValue(objVal(T), objMode(T), pd)
+  -- the leading term of the polynomial comes first, as (degree . coef)
+  (p := objValUnwrap canonicalAE) isnt [[d, :.], :.] or d = 0 =>
+      throw_msg("S2IS0012", CONCAT('"In the algebraic extension %1b | %2pb ,",
+          '" %2pb must be a polynomial of positive degree in %1b ."),
+          [a, unVectorize(eq)])
   sae:= ['SimpleAlgebraicExtension,field,pd,objValUnwrap canonicalAE]
   saeTypeSynonym := INTERN STRCONC('"SAE",STRINGIMAGE a)
   saeTypeSynonymValue := objNew(sae,'(Type))
