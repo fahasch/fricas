@@ -62,7 +62,9 @@ displayPreCompilationErrors() ==
     else sayMath ['"    ",:first $postStack]
   TERPRI()
 
-postTran x ==
+postTran x == copy_pos(x, postTran1 x)
+
+postTran1 x ==
   atom x =>
     postAtom x
   op := first x
@@ -316,7 +318,7 @@ postFlattenLeft(x,op) ==--
 
 postSemiColon u ==
     [:l, x] := postFlattenLeft(u, ";")
-    ['SEQ, :postBlockItemList l, ["exit", postTran x]]
+    ['SEQ, :postBlockItemList l, copy_pos(x, ["exit", postTran x])]
 
 postSignature1(op, sig) ==
     sig1 := postType sig

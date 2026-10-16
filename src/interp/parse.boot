@@ -98,7 +98,9 @@ init_parse_tran() ==
 
 init_parse_tran()
 
-parseTran x ==
+parseTran x == copy_pos(x, parseTran1 x)
+
+parseTran1 x ==
   atom x => parseAtom x
   [op, :argl] := x
   u := (op is ['Sel, ., x] => x; op)

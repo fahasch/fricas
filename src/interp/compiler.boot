@@ -109,15 +109,36 @@ compOrCroak1(x,m,e,compFn) ==
         if $compErrorMessageStack
            then first $compErrorMessageStack
            else '"unspecified error"
+      pos := comp_stack_pos()
       $scanIfTrue =>
-        stackSemanticError(errorMessage,mkErrorExpr $level)
+        stack_semantic_error_at(pos, errorMessage, mkErrorExpr $level)
         ["failedCompilation",m,e]
       displaySemanticErrors()
       SAY('"****** comp fails at level ",$level,'" with expression: ******")
       displayComp $level
-      userError errorMessage
+      userError pos_message(pos, errorMessage)
 
-comp(x,m,e) ==
+-- the position of the innermost expression on $compStack that has one
+-- (the innermost one is the last)
+comp_stack_pos() ==
+  pos := nil
+  for entry in REVERSE($compStack) while not(pos) repeat
+      pos := get_pos(first entry)
+  pos or $comp_pos
+
+-- $comp_pos is the source position of the innermost expression being
+-- compiled that has one
+DEFPARAMETER($comp_pos, nil)
+
+comp(x, m, e) ==
+  (pos := get_pos(x)) => comp_at_pos(pos, x, m, e)
+  comp0(x, m, e)
+
+comp_at_pos(pos, x, m, e) ==
+  $comp_pos : local := pos
+  comp0(x, m, e)
+
+comp0(x,m,e) ==
   T:= compNoStacking(x,m,e) => ($compStack:= nil; T)
   $compStack:= [[x,m,e,$exitModeStack],:$compStack]
   nil

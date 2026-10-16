@@ -135,20 +135,60 @@ expect_symbol(x) ==
     spad_syntax_error(x, nil)
 
 DEFPARAMETER($reduction_stack, nil)
+-- the source positions of the elements of $reduction_stack
+DEFPARAMETER($reduction_pos_stack, nil)
+-- the earliest position of the elements popped since the last push
+DEFPARAMETER($popped_pos, nil)
 
+-- the position of the current token, or else of the prior one
+token_pos() ==
+    greater_SI($token_fifo.$token_count_off, 0) =>
+        ($token_fifo.$current_off).$pos_off
+    ($token_fifo.$prior_off).$pos_off
+
+-- A node starts at the earliest of the elements it was built from.
 push_reduction(x, y) ==
+    pos :=
+        CONSP(y) =>
+            p := $popped_pos
+            for el in y repeat
+                p := earlier_pos(p, get_pos(el))
+            p or ($token_fifo.$prior_off).$pos_off
+        token_pos()
+    push_with_pos(y, pos)
+
+-- A token starts at itself.
+push_token(y) == push_with_pos(y, token_pos())
+
+push_with_pos(y, pos) ==
+    $popped_pos := nil
+    note_pos(y, pos)
+    PUSH(pos, $reduction_pos_stack)
     PUSH(y, $reduction_stack)
     true
 
-pop_stack_1() == POP($reduction_stack)
+note_popped_pos(pos) ==
+    $popped_pos := earlier_pos($popped_pos, pos)
+
+pop_stack_1() ==
+    note_popped_pos(POP($reduction_pos_stack))
+    POP($reduction_stack)
 
 pop_stack_2() ==
+    p1 := POP($reduction_pos_stack)
+    note_popped_pos(POP($reduction_pos_stack))
+    PUSH(p1, $reduction_pos_stack)
     el1 := POP($reduction_stack)
     el2 := POP($reduction_stack)
     PUSH(el1, $reduction_stack)
     el2
 
 pop_stack_3() ==
+    p1 := POP($reduction_pos_stack)
+    p2 := POP($reduction_pos_stack)
+    note_popped_pos(POP($reduction_pos_stack))
+    PUSH(p2, $reduction_pos_stack)
+    PUSH(p1, $reduction_pos_stack)
     el1 := POP($reduction_stack)
     el2 := POP($reduction_stack)
     el3 := POP($reduction_stack)
@@ -162,7 +202,7 @@ parse_token(token) ==
     tok := match_current_token(token, nil)
     not(tok) => nil
     symbol := token_symbol(tok)
-    push_reduction(token, COPY_-TREE(symbol))
+    push_token(COPY_-TREE(symbol))
     advance_token()
     true
 
@@ -201,6 +241,9 @@ dollarTran(dom, expr) ==
 
 parse_new_expr() ==
     $reduction_stack := nil
+    $reduction_pos_stack := nil
+    $popped_pos := nil
+    clear_parse_positions()
     parse_Expr 0
 
 parse_InfixWith() ==

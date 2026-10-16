@@ -1,3 +1,14 @@
+2026-10-16  fahasch  <fahasch@yahoo.de>
+
+	* src/interp/posit.boot, src/interp/scwrap2.boot,
+	src/interp/s-parser.boot: Record source positions of parse tree
+	nodes.
+	* src/interp/ncomp.boot, src/interp/postpar.boot,
+	src/interp/parse.boot, src/interp/define.boot,
+	src/interp/c-util.boot: Keep positions through transformations.
+	* src/interp/compiler.boot, src/interp/c-util.boot: Show file and
+	line in compiler errors and warnings.
+
 2026-10-14  Johannes Grabmeier  <johannes@grabmeier.net>
 
 	* src/algebra/tree.spad: Add LeafIndexingTree

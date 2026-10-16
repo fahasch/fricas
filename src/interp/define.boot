@@ -127,7 +127,9 @@ macroExpandInPlace(x,e) ==
   RPLACD(x,rest y)
   x
 
-macroExpand(x,e) ==   --not worked out yet
+macroExpand(x, e) == copy_pos(x, macroExpand1(x, e))
+
+macroExpand1(x,e) ==   --not worked out yet
   atom x =>
       u := get(x, 'macro, e) =>
           null(rest(u)) =>
@@ -241,7 +243,7 @@ compDefineCategory2(form, signature, body, m, e,
     $functorForm : local := sform
     $formalArgList:= [:sargl,:$formalArgList]
     aList:= [[a,:sa] for a in argl for sa in sargl]
-    formalBody:= SUBLIS(aList,body)
+    formalBody := copy_pos_tree(body, SUBLIS(aList, body))
     signature' := SUBLIS(aList,signature')
 --Begin lines for category default definitions
     $functionStats: local:= [0,0]

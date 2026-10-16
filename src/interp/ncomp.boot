@@ -19,7 +19,9 @@ flattenSemi(tree) ==
 -- Expansion of macros and removal of macrodefinitions
 --
 
-expandMacros(tree) ==
+expandMacros(tree) == copy_pos(tree, expandMacros1(tree))
+
+expandMacros1(tree) ==
     ATOM tree =>
         mdef := HGET($MacroTable, tree)
         mdef =>
