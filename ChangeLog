@@ -8,6 +8,9 @@
 	src/interp/c-util.boot: Keep positions through transformations.
 	* src/interp/compiler.boot, src/interp/c-util.boot: Show file and
 	line in compiler errors and warnings.
+	* src/interp/modemap.boot: In addDomain, test for the value of
+	$NoValueMode, not for the symbol $NoValueMode.  Avoids the bogus
+	error message "NoValueMode is an unknown mode".
 
 2026-10-14  Johannes Grabmeier  <johannes@grabmeier.net>
 
