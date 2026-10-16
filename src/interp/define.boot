@@ -240,6 +240,7 @@ compDefineCategory2(form, signature, body, m, e,
     signature':=
         [first signature, :[getArgumentModeOrMoan(a, form, e) for a in argl]]
     e:= giveFormalParametersValues(argl,e)
+    check_export_types(body, e)
 
 --   3. replace arguments by $1,..., substitute into body,
 --     and introduce declarations into environment
@@ -316,6 +317,42 @@ compDefineFunctor(df,m,e,prefix,fal) ==
   $LISPLIB => compDefineLisplib(df,m,e,prefix,fal,'compDefineFunctor1)
   compDefineFunctor1(df,m,e,prefix,fal)
 
+-- report the unknown type names in the signatures of the exports in
+-- target (the "with" part of a declaration or of a category definition)
+check_export_types(target, e) ==
+    for sig in export_signatures(target) repeat
+        for t in CADDR(sig) repeat
+            for x in unknown_type_names(t, e) repeat
+                stack_semantic_error_at(get_pos(sig) or $comp_pos,
+                    [STRINGIMAGE(x), '" is not a valid type"], nil)
+
+export_signatures(x) ==
+    x is ["SIGNATURE", ., types, :.] and LISTP(types) => [x]
+    x is ["CATEGORY", ., :l] or x is ["Join", :l] or x is ["PROGN", :l] =>
+        [:export_signatures(y) for y in l]
+    x is ["IF", ., a, b] => [:export_signatures(a), :export_signatures(b)]
+    nil
+
+-- the names in the type t that are neither types nor known in e
+unknown_type_names(t, e) ==
+    IDENTP(t) => (known_type_name?(t, e) => nil; [t])
+    t is [":", ., t1] => unknown_type_names(t1, e)
+    t is [op, :args] and IDENTP(op) =>
+        MEMQ(op, '(QUOTE Enumeration)) => nil
+        MEMQ(op, '(Mapping Record Union)) =>
+            [:unknown_type_names(a, e) for a in args]
+        not(known_type_name?(op, e)) => [op]
+        -- only the arguments that are types, not values like 0
+        cosig := get_database(op, 'COSIG) =>
+            [:unknown_type_names(a, e) for a in args for c in rest(cosig) | c]
+        nil
+    nil
+
+known_type_name?(x, e) ==
+    MEMQ(x, '(% _$ Mapping Record Union Enumeration Category Type)) or
+      getmode(x, e) or get(x, "value", e) or isFunctor(x) or
+        constructor?(x) or isCategoryForm(x)
+
 compDefineFunctor1(df is ['DEF, form, signature, body],
   m, e, $prefix, $formalArgList) ==
 --  1. bind global variables
@@ -349,6 +386,7 @@ compDefineFunctor1(df is ['DEF, form, signature, body],
     e := giveFormalParametersValues(argl, e)
     [ds, ., e] := compMakeCategoryObject(target, e) or
       stackAndThrow [target, '" is not a valid category"]
+    check_export_types(target, e)
 --+ copy needed since slot1 is reset; compMake.. can return a cached vector
     base_shell := COPY_-SEQ ds
     $domainShell : local := base_shell

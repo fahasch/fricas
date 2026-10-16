@@ -24,6 +24,9 @@
 	* src/interp/lisplib.boot, src/interp/define.boot: Report an
 	unknown category in the target of a constructor instead of
 	failing with a Lisp error.
+	* src/interp/define.boot: Check the types in the signatures of the
+	exports of a constructor, and report an unknown one at the line
+	of the signature.
 	* src/interp/compiler.boot, src/interp/c-util.boot,
 	src/interp/define.boot, src/interp/iterator.boot: Say "type"
 	instead of "mode" and do not name internal functions in the
