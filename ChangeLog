@@ -29,6 +29,12 @@
 	instead of "mode" and do not name internal functions in the
 	remaining messages and warnings, for loops, exits and multiple
 	assignments among others.
+	* src/interp/i-analy.boot: Say "There is no field kerr in
+	Record(...)" for an unknown field of a record.  Give the type of a
+	non-Boolean condition.  For a wrong number of arguments, say how
+	many arguments the library operations take.
+	* src/interp/i-spec2.boot: Give the type of the right-hand side
+	when an assignment cannot convert it.
 
 2026-10-14  Johannes Grabmeier  <johannes@grabmeier.net>
 

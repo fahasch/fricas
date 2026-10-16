@@ -312,8 +312,8 @@ bottomUpPredicate(pred, name) ==
   putTarget(pred,$Boolean)
   ms := bottomUp pred
   $Boolean ~= first ms => throw_msg("S2IB0001", CONCAT(
-     '"An expression following %1b must evaluate to a %b Boolean %d",
-       '" and you have written one that does not."), [name])
+     '"An expression following %1b must evaluate to a %b Boolean",
+       '" %d , but this one has type %2bp ."), [name, first ms])
   ms
 
 bottomUpCompilePredicate(pred, name) ==
@@ -588,6 +588,13 @@ bottomUpForm0(t,op,opName,argl,argModeSetList) ==
 
   $noEvalTypeMsg => spadThrow()
 
+  -- r.s with s not a field of the record r
+  opName = "elt" and argModeSetList is [[rm, :.], [['Variable, s]]] and
+    rm is ['Record, :.] and not(member(s, getUnionOrRecordTags(rm))) =>
+      msg := '"There is no field %1b in %2bp ."
+      not($genValue) => msg_comp_failure1("S2IB0014", msg, [s, rm], op)
+      throw_msg_pos("S2IB0014", msg, [s, rm], op)
+
   amsl := printableArgModeSetList()
   opName1 :=
     opName0 = $immediateDataSymbol =>
@@ -662,16 +669,12 @@ sayIntelligentMessageAboutOpAvailability(opName, nArgs) ==
     nAllMmsWithNameAndArgs := #getAllModemapsFromDatabase(opName, nArgs)
     nAllMmsWithNameAndArgs = 0 =>
         say_msg("S2IB0008d", CONCAT( _
-  '"There are no library operations named %1b having %2 argument(s)", _
-  '" though there are %3 exposed operation(s) and %4 unexposed", _
-  '" operation(s) having a different number of", _
-  '" arguments. Use HyperDoc Browse, or issue", _
-  '" %ceon )what op %1 %ceoff to learn what operations", _
-  '" contain _" %1 _" in their names, or issue", _
+  '"There are no library operations named %1b having %2 argument(s).", _
+  '" The library operations named %1b take %3 argument(s).", _
+  '" Use HyperDoc Browse, or issue", _
   '" %ceon )display op %1 %ceoff to learn more about the available", _
   '" operations."), _
-            [opName, nArgs, nAllExposedMmsWithName,
-                nAllMmsWithName - nAllExposedMmsWithName])
+            [opName, nArgs, op_arities_text(opName)])
     nAllExposedMmsWithNameAndArgs = 0 =>
         say_msg("S2IB0008e", CONCAT( _
   '"There are no exposed library operations named %1b having %2", _
@@ -693,6 +696,15 @@ sayIntelligentMessageAboutOpAvailability(opName, nArgs) ==
         [opName, nArgs, nAllExposedMmsWithNameAndArgs,
             nAllMmsWithNameAndArgs - nAllExposedMmsWithNameAndArgs])
   nil
+
+-- the numbers of arguments of the library operations named op, as
+-- "1 or 2"
+op_arities_text(op) ==
+    arities := SORT(REMDUP([#sig for [[., ., :sig], :.] in
+                     getAllModemapsFromDatabase(op, nil)]), function _<)
+    s := STRINGIMAGE(first(arities))
+    for n in rest(arities) repeat s := CONCAT(s, '" or ", STRINGIMAGE(n))
+    s
 
 bottomUpType(t, type) ==
   mode :=

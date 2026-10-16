@@ -566,9 +566,9 @@ evalLET(lhs,rhs) ==
     null (v := getArgValue(rhs,t2)) =>
       isWrapped(objVal v') and (v2:=coerceInteractive(v',$OutputForm)) =>
           throw_msg("S2IS0036", CONCAT(
-              '"Cannot convert right-hand side of assignment %1m to an",
-              '" object of the type %2bp of the left-hand side."),
-              [objValUnwrap(v2), t2])
+              '"Cannot convert right-hand side of assignment %1m of",
+              '" type %3bp to an object of the type %2bp of the",
+              '" left-hand side."), [objValUnwrap(v2), t2, objMode(v')])
       throw_msg("S2IS0037", CONCAT(
           '"Cannot convert right-hand side of assignment to an object of",
           '" the type %1bp of the left-hand side."), [t2])
