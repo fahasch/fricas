@@ -16,6 +16,11 @@
 	print one message with the function name and the expressions in
 	Spad syntax, on one line; the internal state only if
 	$comp_fail_dump is set.
+	* src/interp/compiler.boot, src/interp/modemap.boot: Explain a
+	failed compilation: undeclared variable, unknown operation, wrong
+	number of arguments, no operation for the argument types, type
+	mismatch.  Word the messages like the interpreter, and say "type"
+	instead of "mode".
 
 2026-10-14  Johannes Grabmeier  <johannes@grabmeier.net>
 

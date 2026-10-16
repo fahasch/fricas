@@ -109,6 +109,7 @@ compOrCroak1(x,m,e,compFn) ==
         if $compErrorMessageStack
            then first $compErrorMessageStack
            else '"unspecified error"
+      if (d := comp_fail_explain(errorMessage)) then errorMessage := d
       pos := comp_stack_pos()
       $scanIfTrue =>
         stack_semantic_error_at(pos, comp_fail_items(errorMessage),
@@ -128,6 +129,10 @@ DEFPARAMETER($comp_fail_dump, false)
 -- msg with forms in Spad syntax
 comp_fail_items(msg) ==
     [comp_fail_item(x) for x in (atom(msg) => [msg]; msg)]
+
+source_text(x) ==
+    STRINGP(x) => CONCAT('"_"", x, '"_"")
+    comp_fail_item(x)
 
 comp_fail_item(x) ==
     PAIRP(x) => formString(x)
@@ -155,6 +160,66 @@ comp_fail_concat(l) ==
                                          '";"])) then
             s := CONCAT(s, '" ")
         s := CONCAT(s, x)
+    s
+
+-- a clearer message than msg (a "cannot compile" or a type mismatch),
+-- from the expressions that failed ($compStack), or nil
+comp_fail_explain(msg) ==
+    not(PAIRP(msg)) => nil
+    mismatch := #msg = 6 and msg.1 = '" has type "
+    not(mismatch or first(msg) = '"cannot compile") => nil
+    entries := REVERSE($compStack)  -- the innermost first
+    null(entries) => nil
+    x := first(first(entries))
+    IDENTP(x) and (d := comp_fail_diagnosis(first(entries))) => d
+    call := nil
+    for entry in entries while not(call) repeat
+        entry is [[op, :.], :.] and IDENTP(op) and
+          not(GET(op, "comp_special")) => call := entry
+    call and (d := comp_fail_diagnosis(call)) => d
+    mismatch and EQUAL(x, first(msg)) => [source_text(x), :rest(msg)]
+    nil
+
+-- why x (an expression that failed, in mode m and environment e)
+-- cannot be compiled, or nil if that is not clear
+comp_fail_diagnosis([x, m, e, :.]) ==
+    IDENTP(x) =>
+        get(x, "value", e) or getmode(x, e) or isFunction(x, e) => nil
+        [STRINGIMAGE(x), '" is not declared"]
+    x isnt [op, :args] or not(IDENTP(op)) => nil
+    GET(op, "comp_special") or get(op, "value", e) or getmode(op, e) => nil
+    null(mms := get(op, "modemap", e)) =>
+        ['"there is no operation named ", STRINGIMAGE(op)]
+    n := #args
+    (msg := arity_message(op, mms, n)) => msg
+    types := [comp_fail_arg_mode(a, e) or return "failed" for a in args]
+    types = "failed" => nil
+    msg := ['"cannot find an operation named ", STRINGIMAGE(op),
+            '" with argument types ", comp_fail_join(types, '", ")]
+    if not(m = $EmptyMode or m = $NoValueMode) then
+        msg := [:msg, '" and result type ", formString(m)]
+    [:msg, '" (see )display operation ", STRINGIMAGE(op), '")"]
+
+-- the mode of argument a, compiled alone without messages, or nil
+comp_fail_arg_mode(a, e) ==
+    $compStack : local := nil
+    $compErrorMessageStack : local := nil
+    $warningStack : local := nil
+    $semanticErrorStack : local := nil
+    $allow_undef : local := true
+    CATCH("compOrCroak", comp(a, $EmptyMode, e)) is [., mode, .] => mode
+    nil
+
+-- "op takes 2 arguments, not n" if no modemap in mms has n arguments
+arity_message(op, mms, n) ==
+    arities := REMDUP([#sig for [[., ., :sig], :.] in mms])
+    MEMBER(n, arities) => nil
+    [STRINGIMAGE(op), '" takes ", comp_fail_join(SORT(arities, function _<),
+      '" or "), '" arguments, not ", STRINGIMAGE(n)]
+
+comp_fail_join(l, sep) ==
+    s := comp_fail_item(first(l))
+    for x in rest(l) repeat s := CONCAT(s, sep, comp_fail_item(x))
     s
 
 -- the position of the innermost expression on $compStack that has one
@@ -463,9 +528,10 @@ compSymbol(s,m,e) ==
     if not member(s,$formalArgList) and not MEMQ(s,$FormalMapVariableList) and
       not isFunction(s,e) and null ($compForModeIfTrue=true) then
           $allow_undef => nil
-          errorRef s
+          stackWarning ['%b, s, '%d, '"is declared as ", formString(m'),
+                        '" but has not been given a value"]
     [s,m',e] --s is a declared argument
-  MEMQ(s,$FormalMapVariableList) => stackMessage ['"no mode found for",s]
+  MEMQ(s,$FormalMapVariableList) => stackMessage ['"no type found for ", s]
   not isFunction(s,e) =>
       $allow_undef => nil
       errorRef s
@@ -628,14 +694,14 @@ getFormModemaps(form is [op,:argl],e) ==
   nargs:= #argl
   finalModemapList:= [mm for (mm:= [[.,.,:sig],:.]) in modemapList | #sig=nargs]
   modemapList and null finalModemapList =>
-    stackMessage ['"no modemap for","%b",op,"%d",'"with ",nargs,'" arguments"]
+    stackMessage arity_message(op, modemapList, nargs)
   finalModemapList
 
 eltModemapFilter(name,mmList,e) ==
   isConstantId(name,e) =>
     l:= [mm for mm in mmList | mm is [[.,.,.,sel,:.],:.] and sel=name] => l
             -- setelt! has extra parameter
-    stackMessage ['"selector variable: ",name,'" is undeclared and unbound"]
+    stackMessage ['"there is no field ", name]
     nil
   mmList
 
@@ -690,7 +756,7 @@ setqSingle(id,val,m,E) ==
         (T:= comp(val,$EmptyMode,E)) and getmode(T.mode,E) =>
           assignError(val,T.mode,id,m'')
   m'' = $EmptyMode and T.mode = $EmptyMode =>
-      stackMessage ['"No mode in assignment to: ", id]
+      stackMessage ['"cannot determine the type of ", id]
   finish_setq_single(T, m, id, val, currentProplist)
 
 cons_value(v, m) == ["value", v, m, $EmptyEnvironment]
@@ -737,9 +803,9 @@ saveLocVarsTypeDecl(x, id, e) ==
 assignError(val,m',form,m) ==
   message:=
     val =>
-      ['"CANNOT ASSIGN: ",val,"%l",'"   OF MODE: ",m',"%l",'"   TO: ",form,"%l",
-        '"   OF MODE: ",m]
-    ['"CANNOT ASSIGN: ",val,"%l",'"   TO: ",form,"%l",'"   OF MODE: ",m]
+      ['"cannot assign ", val, '" of type ", m', '" to ", form,
+       '" of type ", m]
+    ['"cannot assign ", val, '" to ", form, '" of type ", m]
   stackMessage message
 
 MKPROGN(l) == MKPF(l, "PROGN")
@@ -1206,7 +1272,7 @@ unknownTypeError name ==
   name:=
     name is [op,:.] => op
     name
-  stackSemanticError(["%b",name,"%d",'"is not a known type"],nil)
+  stackSemanticError(["%b",name,"%d",'"is not a valid type"],nil)
 
 compPretend(["pretend",x,t],m,e) ==
   e:= addDomain(t,e)
@@ -1242,10 +1308,17 @@ coerce(T,m) ==
   T.expr = "$fromCoerceable$" or isSomeDomainVariable m => nil
       -- if from coerceable, this coerce was just a trial coercion
       -- from compFormWithModemap to filter through the modemaps
-  stackMessage fn(T.expr,T.mode,m) where
-    fn(x,m1,m2) ==
-      ['"Cannot coerce","%b",x,"%d","%l",'"      of mode","%b",m1,"%d","%l",
-        '"      to mode","%b",m2,"%d"]
+  stackMessage type_mismatch_message(T.expr, T.mode, m)
+
+-- the mode of a string literal is the string itself
+type_mismatch_message(x, m1, m2) ==
+    if STRINGP(x) and STRINGP(m1) then x := source_text(x)
+    [x, '" has type ", type_text(m1), '", but ", type_text(m2),
+     '" is expected"]
+
+type_text(m) ==
+    STRINGP(m) => '"String"
+    m
 
 coerceEasy(T,m) ==
   m=$EmptyMode => T
@@ -1386,8 +1459,8 @@ autoCoerceByModemap([x,source,e],target) ==
     (y:= get(x,"condition",e)) and (or/[u is ["case",., =target] for u in y])
        => [["call",fn,x],target,e]
     x="$fromCoerceable$" => nil
-    stackMessage ['"cannot coerce: ",x,"%l",'"      of mode: ",source,"%l",
-      '"      to: ",target,'" without a case statement"]
+    stackMessage ['"cannot convert ", x, '" of type ", source, '" to ",
+      target, '" without a case statement"]
   [["call",fn,x],target,e]
 
 --% Very old resolve
