@@ -120,7 +120,7 @@ parseAtom x ==
   x = 'break => parseLeave ['$NoValue]
   x
 
-parseTranList l == [parseTran(y) for y in l]
+parseTranList l == carry_name_pos(l, [parseTran(y) for y in l])
 
 parseHas [x,y] ==
   mkand [['has,x,u] for u in fn y] where
@@ -204,8 +204,8 @@ parseSegment p ==
 parseIf t ==
   t isnt [p,a,b] => t
   if_node := $parse_node
-  note_new_pos(ifTran(parseTran p,parseTran a,parseTran b),
-               get_pos(if_node)) where
+  carry_name_pos(if_node, note_new_pos(
+      ifTran(parseTran p,parseTran a,parseTran b), get_pos(if_node))) where
     ifTran(p,a,b) ==
       p = 'true  => a
       p = 'false => b
@@ -240,11 +240,14 @@ transSeq l ==
     (and/[x is [":=", :.] for x in l]) =>
       transSeqIf(item, l, p, q, tail)
   item is ['IF,a,['exit,1,b],'noBranch] =>
-    copy_pos(item, ['IF,decExitLevel a,decExitLevel b,transSeq tail])
+    carry_name_pos(tail,
+      copy_pos(item, ['IF,decExitLevel a,decExitLevel b,transSeq tail]))
   item is ['IF,a,'noBranch,['exit,1,b]] =>
-    copy_pos(item, ['IF,decExitLevel a,transSeq tail,decExitLevel b])
+    carry_name_pos(tail,
+      copy_pos(item, ['IF,decExitLevel a,transSeq tail,decExitLevel b]))
   (y:= transSeq tail) is ['SEQ,:s] => copy_pos(item, ['SEQ,item,:s])
-  copy_pos(item, ['SEQ,item,copy_pos(y, ['exit,1,incExitLevel y])])
+  ex := carry_name_pos(tail, copy_pos(y, ['exit,1,incExitLevel y]))
+  copy_pos(item, ['SEQ,item,ex])
 
 -- item is (SEQ l (exit 1 (IF p (exit 2 q) noBranch))): the assignments l,
 -- then if p then q else the rest of the block; the new nodes keep the
@@ -254,4 +257,5 @@ transSeqIf(item, l, p, q, tail) ==
   if_node := CADDR(last(item))
   new_if := copy_pos(if_node,
                      ['IF, decExitLevel p, decExitLevel q, transSeq tail])
+  carry_name_pos(tail, new_if)
   copy_pos(item, ['SEQ, :l1, copy_pos(new_if, ['exit, 1, new_if])])

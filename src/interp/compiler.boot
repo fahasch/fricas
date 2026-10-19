@@ -240,13 +240,39 @@ comp_stack_pos() ==
 -- compiled that has one
 DEFPARAMETER($comp_pos, nil)
 
+-- the nodes being compiled, the innermost first
+DEFPARAMETER($comp_nodes, nil)
+
+-- the position of the name s for a message: in the innermost node being
+-- compiled, among its elements first, then deeper; nodes built by the
+-- compiler (without a position) are looked through; else $comp_pos
+name_place(s) ==
+  pos := nil
+  done := false
+  for x in $comp_nodes while not(pos or done) repeat
+      pos := name_pos_in(s, x, false) or name_pos_in(s, x, true)
+      done := get_pos(x)
+  pos or $comp_pos
+
+-- the position of the operator of the innermost node being compiled
+op_place() ==
+  $comp_nodes is [node, :.] and (p := get_name_pos(node)) => p
+  $comp_pos
+
 comp(x, m, e) ==
   (pos := get_pos(x)) => comp_at_pos(pos, x, m, e)
+  CONSP(x) => comp_in_node(x, m, e)
   comp0(x, m, e)
 
 comp_at_pos(pos, x, m, e) ==
   $comp_pos : local := pos
-  comp0(x, m, e)
+  comp_in_nodes(x, m, e, [x, :$comp_nodes])
+
+comp_in_node(x, m, e) == comp_in_nodes(x, m, e, [x, :$comp_nodes])
+
+-- (a "$comp_nodes : local := [x, :$comp_nodes]" would see the new,
+-- empty binding on the right-hand side)
+comp_in_nodes(x, m, e, $comp_nodes) == comp0(x, m, e)
 
 comp0(x,m,e) ==
   T:= compNoStacking(x,m,e) => ($compStack:= nil; T)
@@ -534,8 +560,9 @@ compSymbol(s,m,e) ==
     if not member(s,$formalArgList) and not MEMQ(s,$FormalMapVariableList) and
       not isFunction(s,e) and null ($compForModeIfTrue=true) then
           $allow_undef => nil
-          stackWarning ['%b, s, '%d, '"is declared as ", formString(m'),
-                        '" but has not been given a value"]
+          stack_warning_at(name_place(s),
+              ['%b, (s = "$$" => '"%%"; s), '%d, '"is declared as ",
+               formString(m'), '" but has not been given a value"])
     [s,m',e] --s is a declared argument
   MEMQ(s,$FormalMapVariableList) => stackMessage ['"no type found for ", s]
   not isFunction(s,e) =>
@@ -743,8 +770,8 @@ compSetq1(form,val,m,E) ==
 compMakeDeclaration(x,m,e) ==
   compColon(x,m,e)
 
-setqSetelt([v,:s],val,m,E) ==
-    comp(["setelt!", v, :s, val], m, E)
+setqSetelt(form is [v,:s],val,m,E) ==
+    comp(copy_pos(form, ["setelt!", v, :s, val]), m, E)
 
 setqSingle(id,val,m,E) ==
   $insideSetqSingleIfTrue: local:= true
@@ -1291,7 +1318,10 @@ compPretend(["pretend",x,t],m,e) ==
      stackWarning(['"cannot pretend ", formString(x), '" of type ",
                    formString(T.mode), '" to be of type ", formString(m)])
   T:= [T.expr,t,T.env]
-  T':= coerce(T,m) => (if warningMessage then stackWarning warningMessage; T')
+  T':= coerce(T,m) =>
+      if warningMessage then
+          stack_warning_at(op_place(), warningMessage)
+      T'
 
 compIs(["is",a,b],m,e) ==
   [aval,am,e] := comp(a,$EmptyMode,e) or return nil

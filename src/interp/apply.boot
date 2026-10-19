@@ -75,6 +75,9 @@ compApplication(op,argl,m,e,T) ==
   -- use appropriate 'elt'
   op = 'elt => nil
   eltForm := ['elt, op, :argl]
+  -- keep the positions of the application op(argl) being compiled
+  $comp_nodes is [form0, :.] and form0 is [=op, :argl0] and EQ(argl0, argl) =>
+      comp(copy_pos(form0, eltForm), m, e)
   comp(eltForm, m, e)
 
 compFormWithModemap(form is [op,:argl],m,e,modemap) ==

@@ -98,7 +98,7 @@ postTran1 x ==
     [postTran op,:rest u]
   postForm x
 
-postTranList x == [postTran y for y in x]
+postTranList x == carry_name_pos(x, [postTran y for y in x])
 
 postBigFloat x ==
   [.,mant, expon] := x
@@ -209,12 +209,21 @@ postMDef(t) ==
   typeList:= [targetType,:[(x is [":",.,t] => t; nil) for x in rest form]]
   ['MDEF, newLhs, typeList, postTran rhs]
 
-postExit ["=>",a,b] == ['IF,postTran a,['exit,postTran b],'noBranch]
+postExit(x is ["=>",a,b]) ==
+    a1 := postTran a
+    ex := ['exit, postTran b]
+    note_name_from(rest ex, CDDR x)
+    ['IF, a1, ex, 'noBranch]
 
 -- quadratic in case of semicolon...
+-- the elements of nested op forms; the names keep their positions
 postFlatten(x,op) ==
-  x is [ =op,a,b] => [:postFlatten(a,op),:postFlatten(b,op)]
+  x is [ =op,a,b] => NCONC(flatten_cell(CDR x, op), flatten_cell(CDDR x, op))
   LIST x
+
+flatten_cell(c, op) ==
+  (first c) is [ =op, :.] => postFlatten(first c, op)
+  keep_name_cell(c)
 
 postForm (u is [op,:argl]) ==
   x:=
@@ -275,12 +284,14 @@ postCollect [constructOp,:m,x] ==
 postIteratorList x ==
   x is [p,:l] =>
     (p:= postTran p) is ['IN,y,u] =>
-      u is ["|",a,b] => [['IN,y,postInSeq a],["|",b],:postIteratorList l]
-      [['IN,y,postInSeq u],:postIteratorList l]
+      u is ["|",a,b] =>
+          [copy_pos(p, ['IN,y,postInSeq a]),["|",b],:postIteratorList l]
+      [copy_pos(p, ['IN,y,postInSeq u]),:postIteratorList l]
     p is  ['INBY, y, u, v] =>
       u is ["|",a,b] =>
-          [['INBY, y, postInSeq a, v], ["|",b], :postIteratorList l]
-      [['INBY, y, u, v], :postIteratorList l]
+          [copy_pos(p, ['INBY, y, postInSeq a, v]), ["|",b],
+           :postIteratorList l]
+      [copy_pos(p, ['INBY, y, u, v]), :postIteratorList l]
     [p,:postIteratorList l]
   x
 
@@ -313,12 +324,20 @@ postReduce ['Reduce,op,expr] ==
     ['construct,  g]]]
 
 postFlattenLeft(x,op) ==--
-  x is [ =op,a,b] => [:postFlattenLeft(a,op),b]
+  x is [ =op,a,b] => NCONC(flatten_left_cell(CDR x, op), keep_name_cell(CDDR x))
   [x]
 
+flatten_left_cell(c, op) ==
+  (first c) is [ =op, :.] => postFlattenLeft(first c, op)
+  keep_name_cell(c)
+
 postSemiColon u ==
-    [:l, x] := postFlattenLeft(u, ";")
-    ['SEQ, :postBlockItemList l, copy_pos(x, ["exit", postTran x])]
+    items := postFlattenLeft(u, ";")
+    [:l, x] := items
+    stmts := postBlockItemList l
+    ex := copy_pos(x, ["exit", postTran x])
+    note_name_from(rest ex, LAST(items))
+    carry_name_pos(items, ['SEQ, :stmts, ex])
 
 postSignature1(op, sig) ==
     sig1 := postType sig

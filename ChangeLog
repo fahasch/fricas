@@ -1,5 +1,18 @@
 2026-10-19  fahasch  <fahasch@yahoo.de>
 
+	* src/interp/s-parser.boot, src/interp/posit.boot: Record the
+	positions of names; a position is kept for the list cell that
+	holds the name.
+	* src/interp/posit.boot, src/interp/postpar.boot,
+	src/interp/parse.boot, src/interp/compiler.boot,
+	src/interp/apply.boot: Keep the positions of names when the parse
+	tree is rewritten, e.g. for if, =>, blocks, tuples and iterators.
+	* src/interp/compiler.boot, src/interp/c-util.boot: Show the
+	position of the name in the messages about a name without a value
+	and the position of pretend in its warning.  Show % instead of $$.
+
+2026-10-19  fahasch  <fahasch@yahoo.de>
+
 	* src/interp/parse.boot, src/interp/posit.boot: Give the nodes
 	built for an if, and by transSeq for a block and for =>, the
 	position of the node they are built from.
