@@ -1,3 +1,12 @@
+2026-10-19  fahasch  <fahasch@yahoo.de>
+
+	* src/interp/parse.boot, src/interp/posit.boot: Give the nodes
+	built for an if, and by transSeq for a block and for =>, the
+	position of the node they are built from.
+	* src/interp/define.boot: Keep the positions in the body of a
+	default package, and give the forms built for a definition the
+	position of the definition.
+
 2026-10-16  fahasch  <fahasch@yahoo.de>
 
 	* src/interp/posit.boot, src/interp/scwrap2.boot,

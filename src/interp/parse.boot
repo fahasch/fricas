@@ -98,7 +98,12 @@ init_parse_tran() ==
 
 init_parse_tran()
 
-parseTran x == copy_pos(x, parseTran1 x)
+-- the node being transformed by parseTran
+DEFPARAMETER($parse_node, nil)
+
+parseTran x ==
+  $parse_node : local := x
+  copy_pos(x, parseTran1 x)
 
 parseTran1 x ==
   atom x => parseAtom x
@@ -195,14 +200,19 @@ parseSegment p ==
     ['SEGMENT,parseTran a]
   ['SEGMENT,:p]
 
+-- the nodes built for an if get the position of the if
 parseIf t ==
   t isnt [p,a,b] => t
-  ifTran(parseTran p,parseTran a,parseTran b) where
+  if_node := $parse_node
+  note_new_pos(ifTran(parseTran p,parseTran a,parseTran b),
+               get_pos(if_node)) where
     ifTran(p,a,b) ==
       p = 'true  => a
       p = 'false => b
       p is ['not,p'] => ifTran(p',b,a)
-      p is ['IF,p',a',b'] => ifTran(p',ifTran(a',COPY a,COPY b),ifTran(b',a,b))
+      p is ['IF,p',a',b'] =>
+        ifTran(p', ifTran(a', copy_pos_tree(a, COPY a), copy_pos_tree(b, COPY b)),
+               ifTran(b',a,b))
       p is ['SEQ,:l,['exit,1,p']] =>
         ['SEQ,:l,['exit,1,ifTran(p',incExitLevel a,incExitLevel b)]]
          --this assumes that l has no exits
@@ -228,11 +238,20 @@ transSeq l ==
   [item,:tail]:= l
   item is ['SEQ,:l,['exit,1,['IF,p,['exit, =2,q],'noBranch]]] and
     (and/[x is [":=", :.] for x in l]) =>
-      ['SEQ,:[decExitLevel x for x in l],['exit,1,['IF,decExitLevel p,
-        decExitLevel q,transSeq tail]]]
+      transSeqIf(item, l, p, q, tail)
   item is ['IF,a,['exit,1,b],'noBranch] =>
-    ['IF,decExitLevel a,decExitLevel b,transSeq tail]
+    copy_pos(item, ['IF,decExitLevel a,decExitLevel b,transSeq tail])
   item is ['IF,a,'noBranch,['exit,1,b]] =>
-    ['IF,decExitLevel a,transSeq tail,decExitLevel b]
-  (y:= transSeq tail) is ['SEQ,:s] => ['SEQ,item,:s]
-  ['SEQ,item,['exit,1,incExitLevel y]]
+    copy_pos(item, ['IF,decExitLevel a,transSeq tail,decExitLevel b])
+  (y:= transSeq tail) is ['SEQ,:s] => copy_pos(item, ['SEQ,item,:s])
+  copy_pos(item, ['SEQ,item,copy_pos(y, ['exit,1,incExitLevel y])])
+
+-- item is (SEQ l (exit 1 (IF p (exit 2 q) noBranch))): the assignments l,
+-- then if p then q else the rest of the block; the new nodes keep the
+-- positions of the old ones
+transSeqIf(item, l, p, q, tail) ==
+  l1 := [decExitLevel x for x in l]
+  if_node := CADDR(last(item))
+  new_if := copy_pos(if_node,
+                     ['IF, decExitLevel p, decExitLevel q, transSeq tail])
+  copy_pos(item, ['SEQ, :l1, copy_pos(new_if, ['exit, 1, new_if])])

@@ -88,12 +88,12 @@ compDefine1(form,m,e) ==
                      '" == ...: ", opOf(lhs), '" is not declared"]
   compDefineCapsuleFunction(form, m, e, $prefix, $formalArgList)
 
-compDefineAddSignature([op,:argl],signature,e) ==
+compDefineAddSignature(lhs is [op,:argl],signature,e) ==
   (sig:= hasFullSignature(argl,signature,e)) and
    not assoc(['%, :sig], LASSOC('modemap, getProplist(op, e))) =>
      declForm:=
        [":",[op,:[[":",x,m] for x in argl for m in rest sig]],first signature]
-     [.,.,e]:= comp(declForm,$EmptyMode,e)
+     [.,.,e]:= comp(note_new_pos(declForm, get_pos(lhs)),$EmptyMode,e)
      e
   e
 
@@ -220,8 +220,9 @@ mkCategoryPackage(form is [op, :argl], def, e) ==
   nils:= [nil for x in argl]
   packageSig := [packageCategory,form,:nils]
   $categoryPredicateList := SUBST(nameForDollar, '%, $categoryPredicateList)
-  SUBST(nameForDollar, '%,
-      ['DEF, [packageName, :packageArgl], packageSig, def])
+  pkg_def := note_new_pos(['DEF, [packageName, :packageArgl], packageSig, def],
+                          get_pos(def))
+  copy_pos_tree(pkg_def, SUBST(nameForDollar, '%, pkg_def))
 
 compDefineCategory2(form, signature, body, m, e,
   $prefix,$formalArgList) ==
@@ -549,7 +550,7 @@ genDomainOps(viewName, cat) ==
     [op, sig] := opsig
     $tmp_e := addModemap(op, viewName, sig, cond, ['ELT, viewName, 0], $tmp_e)
 
-compDefWhereClause(['DEF, form, signature, body], m, e) ==
+compDefWhereClause(df is ['DEF, form, signature, body], m, e) ==
 -- form is lhs (f a1 ... an) of definition; body is rhs;
 -- signature is (t0 t1 ... tn) where t0= target type, ti=type of ai, i > 0;
 
@@ -602,7 +603,7 @@ compDefWhereClause(['DEF, form, signature, body], m, e) ==
 
 -- 5. compile new ('DEF,("where",form',:WhereList),:.) where
 --    all argument parameters of form' are bound/declared in WhereList
-  comp(form',m,e) where
+  comp(note_new_pos(form', get_pos(df)), m, e) where
     form':=
       ["where",defform,:whereList] where
         defform:=

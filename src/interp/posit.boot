@@ -195,6 +195,18 @@ copy_pos_tree(x, y) ==
         y
     y
 
+-- give the nodes of x without a position, down to the nodes that have
+-- one, the position pos; returns x
+note_new_pos(x, pos) ==
+    pos and CONSP(x) and not(get_pos(x)) =>
+        HPUT($parse_positions, x, pos)
+        y := x
+        while CONSP(y) repeat
+            note_new_pos(first y, pos)
+            y := rest y
+        x
+    x
+
 -- the text "file:line: " for a position, or nil
 pos_prefix(pos) ==
     null(pos) => nil
