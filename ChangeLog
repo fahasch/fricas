@@ -1,5 +1,10 @@
 2026-10-23  Fabian Hassler  <fahasch@yahoo.de>
 
+	* src/interp/c-util.boot: Fix )compile ... )nobreak at the first
+	semantic error ($bright unbound)
+
+2026-10-23  Fabian Hassler  <fahasch@yahoo.de>
+
 	* src/interp/compiler.boot: A local variable hides constants
 	of the same name (fixes issue 80)
 	* src/input/LocalHidesConstant.spad, src/input/bugs2026.input,

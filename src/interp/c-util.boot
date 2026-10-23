@@ -77,8 +77,6 @@ displayWarning(l,stream) ==
     sayBrightly2(['"      [", i, '"] ", :x], stream)
 
 displayComp level ==
-  $bright:= " << "
-  $dim:= " >> "
   if $insideCapsuleFunctionIfTrue=true then
     sayBrightly ['"error in function",'%b,$op,'%d,'%l]
   pp removeZeroOne mkErrorExpr level
@@ -99,11 +97,11 @@ mkErrorExpr level ==
           highlight(b,a) ==
             atom b =>
               substitute(var,b,a) where
-                var:= INTERN STRCONC(STRINGIMAGE $bright,STRINGIMAGE b,STRINGIMAGE $dim)
+                var:= INTERN STRCONC('" << ", STRINGIMAGE b, '" >> ")
             highlight1(b,a) where
               highlight1(b,a) ==
                 atom a => a
-                a is [ =b,:c] => [$bright,b,$dim,:c]
+                a is [ =b,:c] => [" << ", b, " >> ", :c]
                 [highlight1(b,first a),:highlight1(b,rest a)]
       substitute(bracket rest l,first rest l,first l)
 
