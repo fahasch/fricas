@@ -13,7 +13,7 @@ BINFILES= $(fricas_target_bindir)/hypertex$(EXEEXT) \
 		${OUTLIB}/hthits$(EXEEXT) ${OUTLIB}/ex2ht$(EXEEXT)
 
 
-HEADERS_src = extent.h hterror.h hyper.h keyin.h lex.h \
+HEADERS_src = extent.h hterror.h html.h hyper.h keyin.h lex.h \
 	parse.h parse-types.h token.h
 
 HEADERS = $(addprefix $(srcdir)/, $(HEADERS_src) $(BITMAPS)) $(fricas_c_macros)
@@ -21,12 +21,34 @@ HEADERS = $(addprefix $(srcdir)/, $(HEADERS_src) $(BITMAPS)) $(fricas_c_macros)
 
 build_libdir = $(abs_top_builddir)/src/lib
 
-hypertex_sources = addfile.c cond.c dialog.c display.c event.c extent1.c \
-		extent2.c form-ext.c group.c halloc.c hash.c hterror.c \
-		htinp.c hyper.c initx.c input.c item.c keyin.c lex.c \
-		macro.c mem.c parse.c parse-aux.c parse-input.c \
-		parse-paste.c parse-types.c ReadBitmap.c scrollbar.c \
-		show-types.c spadint.c titlebar.c
+# HYPERDOC_VARIANT: x11 (X11 windows) or html (pages in a web browser).
+# The shared files are compiled in both variants.
+HYPERDOC_VARIANT = @HYPERDOC_VARIANT@
+
+hypertex_shared_sources = addfile.c cond.c group.c halloc.c hash.c \
+		hterror.c htinp.c hyper.c item.c lex.c macro.c mem.c \
+		parse.c parse-aux.c parse-input.c parse-paste.c \
+		parse-types.c spadint.c
+hypertex_x11_sources = dialog.c display.c event.c extent1.c extent2.c \
+		form-ext.c initx.c input.c keyin.c ReadBitmap.c \
+		scrollbar.c show-types.c titlebar.c
+hypertex_html_sources = html.c httpd.c webmain.c
+
+# files the HTTP server of the html variant serves under static/
+wwwdir = $(fricas_target_datadir)/hypertex/www
+WWWFILES = $(wwwdir)/hyperdoc.css
+
+ifeq ($(HYPERDOC_VARIANT),html)
+hypertex_sources = $(hypertex_shared_sources) $(hypertex_html_sources)
+HYPERDOC_CFLAGS = -DHYPERDOC_HTML
+HYPERDOC_LDFLAGS =
+HYPERDOC_DATA = $(WWWFILES)
+else
+hypertex_sources = $(hypertex_shared_sources) $(hypertex_x11_sources)
+HYPERDOC_CFLAGS = $(FRICAS_X11_CFLAGS)
+HYPERDOC_LDFLAGS = $(FRICAS_X11_LDFLAGS)
+HYPERDOC_DATA =
+endif
 
 hypertex_objects = $(hypertex_sources:.c=.$(OBJEXT))
 hypertex_LDADD = -L$(build_libdir) -lspad $(fricas_c_runtime_extra)
@@ -61,7 +83,7 @@ all: all-ax
 all-ax all-hyper: stamp
 	@ echo finished $(builddir)
 
-stamp: ${SCRIPTS} ${BINFILES}
+stamp: ${SCRIPTS} ${BINFILES} $(HYPERDOC_DATA)
 	-rm -f stamp
 	$(STAMP) stamp
 
@@ -79,31 +101,35 @@ distclean-local: clean-local
 .PRECIOUS: %.$(OBJEXT)
 
 %.$(OBJEXT): $(srcdir)/%.c $(HEADERS)
-	$(CC) $(CFLAGS) ${CCF} $(fricas_includes) $(FRICAS_X11_CFLAGS) \
+	$(CC) $(CFLAGS) ${CCF} $(fricas_includes) $(HYPERDOC_CFLAGS) \
 	    -I$(srcdir) -c -o $@ $<
 
 ${OUTLIB}/htsearch: $(srcdir)/htsearch
 	cp $< $@
 	chmod a+x $@
 
+$(wwwdir)/%: $(srcdir)/www/%
+	$(MKDIR_P) $(wwwdir)
+	cp $< $@
+
 ${OUTLIB}/presea: $(srcdir)/presea.in
 	sed 's,@TARGET_AWK@,${TARGET_AWK},' $< > $@
 	chmod a+x $@
 
 ${OUTLIB}/ex2ht$(EXEEXT): $(ex2ht_objects) $(ex2ht_DEPENDENCIES)
-	${CC} $(ex2ht_objects) -o $@ $(ex2ht_LDADD) $(FRICAS_X11_LDFLAGS) \
+	${CC} $(ex2ht_objects) -o $@ $(ex2ht_LDADD) $(HYPERDOC_LDFLAGS) \
 	    $(LDFLAGS) -lm
 
 $(fricas_target_bindir)/htadd$(EXEEXT): $(htadd_objects) $(htadd_DEPENDENCIES)
-	${CC} $(htadd_objects) -o $@ $(htadd_LDADD) $(FRICAS_X11_LDFLAGS) \
+	${CC} $(htadd_objects) -o $@ $(htadd_LDADD) $(HYPERDOC_LDFLAGS) \
 	    $(LDFLAGS) -lm
 
 ${OUTLIB}/hthits$(EXEEXT): $(hthits_objects) $(hthits_DEPENDENCIES)
-	${CC} $(hthits_objects) -o $@ $(hthits_LDADD) $(FRICAS_X11_LDFLAGS) \
+	${CC} $(hthits_objects) -o $@ $(hthits_LDADD) $(HYPERDOC_LDFLAGS) \
 	    $(LDFLAGS) -lm
 
 
 $(fricas_target_bindir)/hypertex$(EXEEXT): $(hypertex_objects) $(hypertex_DEPENDENCIES)
-	${CC} $(hypertex_objects) -o $@ $(hypertex_LDADD) $(FRICAS_X11_LDFLAGS) \
+	${CC} $(hypertex_objects) -o $@ $(hypertex_LDADD) $(HYPERDOC_LDFLAGS) \
 	    $(LDFLAGS) -lm
 

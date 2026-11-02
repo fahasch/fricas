@@ -133,9 +133,7 @@ display_page(HyperDocPage *page)
 {
     HyperDocPage *new_page;
 
-    XUnmapSubwindows(gXDisplay, gWindow->fMainWindow);
-    XUnmapSubwindows(gXDisplay, gWindow->fScrollWindow);
-    XFlush(gXDisplay);
+    unmap_page_subwindows();
 
     if (setjmp(jmpbuf)) {
 
@@ -232,7 +230,7 @@ parse_title(HyperDocPage *page)
     if (gNeedIconName) {
         char *title = print_to_string(page->title);
 
-        XSetIconName(gXDisplay, gWindow->fMainWindow, title);
+        set_icon_name(title);
         gNeedIconName = 0;
     }
     if (token.type != Rbrace) {

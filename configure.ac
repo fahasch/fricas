@@ -754,6 +754,28 @@ fi
 X_PRE_LIBS="-lXpm $X_PRE_LIBS"
 AC_SUBST(X_PRE_LIBS)
 
+## HyperDoc in X11 windows or in a web browser
+AC_ARG_WITH([hyperdoc],
+    [AS_HELP_STRING([--with-hyperdoc=x11|html],
+                    [Show HyperDoc in X11 windows or in a web browser
+                     (default: x11 if X11 and Xpm are found, else html).])],
+    [HYPERDOC_VARIANT=$withval],
+    [AS_IF([test x"$fricas_has_xpm" = xyes],
+           [HYPERDOC_VARIANT=x11],
+           [HYPERDOC_VARIANT=html])]
+)
+case $HYPERDOC_VARIANT in
+    x11)
+        if test x"$fricas_has_xpm" != xyes; then
+            AC_MSG_ERROR([--with-hyperdoc=x11 needs X11 and Xpm.])
+        fi
+        ;;
+    html) ;;
+    *) AC_MSG_ERROR([--with-hyperdoc must be x11 or html.]) ;;
+esac
+AC_MSG_NOTICE([HyperDoc variant: $HYPERDOC_VARIANT])
+AC_SUBST(HYPERDOC_VARIANT)
+
 ## If the system supports X11, then build graphics and hyperdoc
 if test x"$fricas_has_xpm" = xyes; then
     fricas_c_runtime="$fricas_c_runtime graphics"
@@ -766,17 +788,17 @@ if test x"$fricas_has_xpm" = xyes; then
     FRICAS_MAKEFILE([src/graph/viewAlone/Makefile])
     FRICAS_MAKEFILE([src/graph/viewman/Makefile])
 else
-    AC_MSG_NOTICE([The Graphics and HyperDoc components are disabled.])
+    AC_MSG_NOTICE([The X11 graphics are disabled.])
 fi
 AC_SUBST(fricas_src_all)
 AC_SUBST(MAYBE_VIEWPORTS)
 AC_SUBST(XVFB)
-if test x"$fricas_has_xpm" = xyes; then
+if test x"$fricas_has_xpm" = xyes -o x"$HYPERDOC_VARIANT" = xhtml; then
    AC_CHECK_HEADER([regex.h],
                    [fricas_src_all="$fricas_src_all all-hyper all-doc"
                     fricas_src_subdirs="$fricas_src_subdirs hyper doc"
                     AC_CHECK_PROGS([XVFB_RUN], [xvfb-run])
-                    if test -n "$XVFB_RUN"; then
+                    if test -n "$XVFB_RUN" -a x"$fricas_has_xpm" = xyes; then
                         MAYBE_VIEWPORTS=viewports
                         XVFB="xvfb-run -a -s '-screen 0 1024x768x24'"
                     else

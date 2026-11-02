@@ -131,10 +131,7 @@ free_hd_window(HDWindow *w)
     free(w->fPageHashTable);
     free(w->fPatchHashTable);
     free(w->fMacroHashTable);
-    XFreeGC(gXDisplay, w->fStandardGC);
-    XFreeGC(gXDisplay, w->fInputGC);
-    XFreeGC(gXDisplay, w->fCursorGC);
-    XFreeGC(gXDisplay, w->fControlGC);
+    free_window_gcs(w);
     free(w);
   }
 }
@@ -247,7 +244,7 @@ free_node(TextNode *node, short int des)
   case Returnbutton:
     if (des && node->link->win) {
       hash_delete(gWindow->page->fLinkHashTable,(char *) &node->link->win);
-      XDestroyWindow(gXDisplay, node->link->win);
+      destroy_subwindow(node->link->win);
     }
     free_if_non_NULL(node->link);
     free_node(node->next, des);
@@ -273,7 +270,7 @@ free_node(TextNode *node, short int des)
   case Spadgraph:
     if (des && node->link->win) {
       hash_delete(gWindow->page->fLinkHashTable,(char *) &node->link->win);
-      XDestroyWindow(gXDisplay, node->link->win);
+      destroy_subwindow(node->link->win);
     }
     /* TTT don't free the link before freeing nodes off it */
     /*  free_node(node->link->reference.node);*/
@@ -483,7 +480,7 @@ free_pastebutton(TextNode *node, short int des)
       free_paste(paste, des);
       hash_delete(gWindow->page->fLinkHashTable,(char *) &node->link->win);
 
-      XDestroyWindow(gXDisplay, node->link->win);
+      destroy_subwindow(node->link->win);
     }
     else
       paste->hasbutton = 0;
@@ -563,7 +560,7 @@ free_input_item(InputItem *sym, short int des)
   free_if_non_NULL(sym->name);
   free_lines(sym->lines);
   if (des)
-    XDestroyWindow(gXDisplay, sym->win);
+    destroy_subwindow(sym->win);
 }
 
 void

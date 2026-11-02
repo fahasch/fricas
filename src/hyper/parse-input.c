@@ -59,7 +59,6 @@ HyperLink *
 make_input_window(InputItem * item)
 {
   HyperLink *link;
-  XSetWindowAttributes at;
 
   if (!make_input_file) {
     link = (HyperLink *) halloc(sizeof(HyperLink), "HyperLink");
@@ -67,13 +66,7 @@ make_input_window(InputItem * item)
       fprintf(stderr, "Ran out of memory allocating a hyper link!\n");
       exit(-1);
     }
-    at.cursor = gActiveCursor;
-    at.background_pixel = gInputBackgroundColor;
-    at.border_pixel = gActiveColor;
-    link->win = XCreateWindow(gXDisplay, gWindow->fDisplayedWindow, 0, 0, 100, 100, 0,
-                              0, InputOutput, CopyFromParent,
-                              CWCursor | CWBackPixel | CWBorderPixel, &at);
-    XSelectInput(gXDisplay, link->win, ButtonPressMask);
+    link->win = make_input_subwindow(1);
     link->type = Inputstring;
     link->x = link->y = 0;
     /** This way when I click in an input window, I need only use reference
@@ -91,7 +84,6 @@ HyperLink *
 make_box_window(InputBox * box, int type)
 {
   HyperLink *link = 0;
-  XSetWindowAttributes at;
 
   if (!make_input_file) {
     link = (HyperLink *) halloc(sizeof(HyperLink), "Make_box_window");
@@ -99,13 +91,7 @@ make_box_window(InputBox * box, int type)
       fprintf(stderr, "Ran out of memory allocating a hyper link!\n");
       exit(-1);
     }
-    at.cursor = gActiveCursor;
-    at.background_pixel = gInputBackgroundColor;
-    link->win = XCreateWindow(gXDisplay, gWindow->fDisplayedWindow,
-                              0, 0, 100, 100, 0,
-                              0, InputOutput, CopyFromParent,
-                              CWCursor | CWBackPixel, &at);
-    XSelectInput(gXDisplay, link->win, ButtonPressMask);
+    link->win = make_input_subwindow(0);
     link->type = type;
     link->x = link->y = 0;
     /** This way when I click in an input window, I need only use reference
@@ -600,4 +586,43 @@ parse_radioboxes(void)
 
   curr_node = return_node;
   return;
+}
+
+InputItem *
+return_item(char *name)
+{
+    InputItem *list;
+
+    list = gWindow->page->input_list;
+    while (list != NULL) {
+        if (!strcmp(name, list->name))
+            return list;
+        list = list->next;
+    }
+    return NULL;
+}
+int
+delete_item(char *name)
+{
+    InputItem *list;
+    InputItem *prev = NULL;
+
+    list = gWindow->page->input_list;
+    while (list != NULL) {
+        if (!strcmp(name, list->name)) {
+            if (prev)
+                prev->next = list->next;
+            else
+                gWindow->page->input_list = list->next;
+            if (gWindow->page->current_item == list)
+                gWindow->page->current_item = gWindow->page->input_list;
+            free_input_item(list, 1);
+            free(list);
+            return 1;
+        }
+        prev = list;
+        list = list->next;
+    }
+    fprintf(stderr, "Can't delete input item %s\n", name);
+    return 0;
 }

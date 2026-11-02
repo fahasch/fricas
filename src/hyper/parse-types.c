@@ -381,7 +381,7 @@ parse_input_pix(void)
         char f[256];
         char *p;
 
-        if ((gXDisplay && DisplayPlanes(gXDisplay, gXScreenNumber) == 1) || gSwitch_to_mono ==1) {
+        if (display_is_mono() || gSwitch_to_mono ==1) {
             pixnode->type = Inputbitmap;
             strcpy(f, pixnode->data.text);
             strcat(f, ".bm");

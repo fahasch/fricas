@@ -1,8 +1,6 @@
-extern InputItem * return_item(char * name);
 extern void fill_box(Window w, ImageStruct * image);
 extern void toggle_input_box(HyperLink * link);
 extern void toggle_radio_box(HyperLink * link);
 extern void change_input_focus(HyperLink * link);
 extern void next_input_focus(void);
 extern void prev_input_focus(void);
-extern int delete_item(char * name);

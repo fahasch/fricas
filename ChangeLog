@@ -1,3 +1,23 @@
+2026-11-02  Fabian Hassler  <fahasch@yahoo.de>
+
+	HyperDoc in the web browser: program structure and HTTP server
+	* configure.ac, configure: New option --with-hyperdoc=x11|html
+	* src/hyper/Makefile.in: Build x11 or html variant of hypertex
+	* src/hyper/hyper.h: Placeholder X11 types for html variant
+	* src/hyper/initx.c: New functions for the X11 calls of the
+	shared files
+	* src/hyper/parse.c, src/hyper/parse-aux.c,
+	src/hyper/parse-input.c, src/hyper/parse-types.c,
+	src/hyper/mem.c: Use them
+	* src/hyper/input.c, src/hyper/parse-input.c: Move return_item
+	and delete_item
+	* src/hyper/hyper.c: Drop unused include
+	* src/hyper/html.c, src/hyper/html.h, src/hyper/httpd.c,
+	src/hyper/webmain.c, src/hyper/www/hyperdoc.css: New files
+	* src/include/html.H1, src/include/httpd.H1: New files
+	src/include/initx.H1, src/include/input.H1,
+	src/include/parse_input.H1: Adjust
+
 2026-11-02  Waldek Hebisch  <cas@fricas.org>
 
 	Add code for direct generation of Html documentation

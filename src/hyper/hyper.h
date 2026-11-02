@@ -40,9 +40,33 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #include <limits.h>
 
+#ifdef HYPERDOC_HTML
+/*
+ * The browser variant has no X11.  The shared files keep their X11
+ * types; a Window is just a number naming a link, an input field or a
+ * HyperDoc window, the other types are only used through pointers.
+ */
+typedef unsigned long Window;
+typedef unsigned long Atom;
+typedef unsigned long Cursor;
+typedef unsigned long Pixmap;
+typedef unsigned long KeySym;
+typedef struct _XGC *GC;
+typedef struct _XDisplay Display;
+typedef struct _XImage XImage;
+typedef struct _XFontStruct XFontStruct;
+typedef union _XEvent XEvent;
+typedef struct _XButtonEvent XButtonEvent;
+/* what the shared files get through X11/Xos.h */
+#include <string.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <fcntl.h>
+#else
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xos.h>
+#endif
 
 #include "com.h"
 #include "token.h"

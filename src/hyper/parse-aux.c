@@ -314,7 +314,6 @@ HyperLink *
 make_link_window(TextNode *link_node, int type, int isSubWin)
 {
     HyperLink *link;
-    XSetWindowAttributes at;
 
     if (make_input_file)
         switch (type) {
@@ -337,12 +336,8 @@ make_link_window(TextNode *link_node, int type, int isSubWin)
             fprintf(stderr, "(HyperDoc) Ran out of memory allocating a hypertext link!\n");
             exit(-1);
         }
-        at.cursor = gActiveCursor;
-        at.event_mask = ButtonPress;
         if (isSubWin)
-            link->win = XCreateWindow(gXDisplay, gWindow->fDisplayedWindow, 0, 0, 100, 100, 0,
-                                      0, InputOnly, CopyFromParent,
-                                      CWEventMask | CWCursor, &at);
+            link->win = make_link_subwindow();
         else
             link->win = 0;
         link->type = type;
@@ -358,7 +353,6 @@ HyperLink *
 make_paste_window(PasteNode *paste)
 {
     HyperLink *link;
-    XSetWindowAttributes at;
 
     if (!make_input_file) {
         link = (HyperLink *) halloc(sizeof(HyperLink), "HyperLink");
@@ -366,12 +360,7 @@ make_paste_window(PasteNode *paste)
             fprintf(stderr, "(HyperDoc) Ran out of memory allocating a hypertext link!\n");
             exit(-1);
         }
-        at.cursor = gActiveCursor;
-        at.event_mask = ButtonPress;
-        link->win = XCreateWindow(gXDisplay, gWindow->fDisplayedWindow,
-                                  0, 0, 100, 100, 0,
-                                  0, InputOnly, CopyFromParent,
-                                  CWEventMask | CWCursor, &at);
+        link->win = make_link_subwindow();
         link->type = Pastebutton;
         link->x = link->y = 0;
         link->reference.paste = paste;

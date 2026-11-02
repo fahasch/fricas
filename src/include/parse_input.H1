@@ -9,3 +9,5 @@ extern void repaste_item(void);
 extern InputItem * current_item(void);
 extern int already_there(char * name);
 extern void parse_radioboxes(void);
+extern InputItem * return_item(char * name);
+extern int delete_item(char * name);

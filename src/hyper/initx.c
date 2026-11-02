@@ -1012,3 +1012,78 @@ is_it_850(XFontStruct *fontarg)
   }
  return(0);
 }
+
+/*
+ * The X11 calls of the shared reader files (parse*.c, mem.c); the
+ * browser variant defines the same functions without X11.
+ */
+
+/* an unmapped window that catches clicks on a link */
+
+Window
+make_link_subwindow(void)
+{
+    XSetWindowAttributes at;
+
+    at.cursor = gActiveCursor;
+    at.event_mask = ButtonPress;
+    return XCreateWindow(gXDisplay, gWindow->fDisplayedWindow, 0, 0, 100, 100,
+                         0, 0, InputOnly, CopyFromParent,
+                         CWEventMask | CWCursor, &at);
+}
+
+/* an unmapped window for an input string (border) or an input box */
+
+Window
+make_input_subwindow(int border)
+{
+    XSetWindowAttributes at;
+    Window w;
+
+    at.cursor = gActiveCursor;
+    at.background_pixel = gInputBackgroundColor;
+    at.border_pixel = gActiveColor;
+    w = XCreateWindow(gXDisplay, gWindow->fDisplayedWindow, 0, 0, 100, 100,
+                      0, 0, InputOutput, CopyFromParent,
+                      CWCursor | CWBackPixel | (border ? CWBorderPixel : 0),
+                      &at);
+    XSelectInput(gXDisplay, w, ButtonPressMask);
+    return w;
+}
+
+void
+destroy_subwindow(Window w)
+{
+    XDestroyWindow(gXDisplay, w);
+}
+
+void
+free_window_gcs(HDWindow *w)
+{
+    XFreeGC(gXDisplay, w->fStandardGC);
+    XFreeGC(gXDisplay, w->fInputGC);
+    XFreeGC(gXDisplay, w->fCursorGC);
+    XFreeGC(gXDisplay, w->fControlGC);
+}
+
+/* hide the windows of the links of the old page */
+
+void
+unmap_page_subwindows(void)
+{
+    XUnmapSubwindows(gXDisplay, gWindow->fMainWindow);
+    XUnmapSubwindows(gXDisplay, gWindow->fScrollWindow);
+    XFlush(gXDisplay);
+}
+
+void
+set_icon_name(char *title)
+{
+    XSetIconName(gXDisplay, gWindow->fMainWindow, title);
+}
+
+int
+display_is_mono(void)
+{
+    return gXDisplay && DisplayPlanes(gXDisplay, gXScreenNumber) == 1;
+}

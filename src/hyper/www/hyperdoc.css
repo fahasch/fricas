@@ -1,0 +1,15 @@
+/*
+ * hyperdoc.css: the look of HyperDoc in the browser.  The HTML of a
+ * page carries only its structure (classes ht-*); everything about
+ * the look is here.
+ */
+
+body {
+    font-family: serif;
+    margin: 1em;
+}
+
+.ht-title {
+    text-align: center;
+    font-size: 1.2em;
+}
