@@ -1,2 +1,3 @@
 extern int httpd_open(void);
 extern void httpd_serve(void);
+extern char *httpd_url(void);

@@ -48,6 +48,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "sockio-c.H1"
 #include "bsdsignal.H1"
 
+#ifdef HYPERDOC_HTML
+#include <sys/time.h>
+
+#include "html.h"
+#include "webmain.H1"
+
+#define BufferWait 20           /* seconds for spadbuf to connect */
+#endif
+
 static void start_user_buffer(HyperDocPage * page);
 static void clear_execution_marks(HashTable * depend_hash);
 static void issue_dependent_commands(HyperDocPage * page, TextNode * command,
@@ -84,6 +93,8 @@ issue_spadcommand(HyperDocPage *page, TextNode *command, int immediate,
 
     if (page->sock == NULL)
         start_user_buffer(page);
+    if (page->sock == NULL)
+        return;
     ret_val = send_int(page->sock, TestLine);
     if (ret_val == -1) {
         page->sock = NULL;
@@ -193,12 +204,26 @@ start_user_buffer(HyperDocPage *page)
         fprintf(stderr, "start_user_buffer: $FRICAS is empty\n");
         exit(-1);
     }
-    if (TERM == NULL) {
-        TERM = "xterm";
-    }
     sprintf(spadbuf, "%s/lib/spadbuf", SPAD);
     sprintf(complfile, "%s/lib/command.list", SPAD);
     title = print_to_string(page->title);
+#ifdef HYPERDOC_HTML
+    /* without X11: the terminal of the system (webmain.c) */
+    if (TERM == NULL) {
+        if (start_terminal(title, spadbuf, page->name,
+                           access(complfile, R_OK) == 0 ? complfile : NULL) == -1) {
+            fprintf(stderr, "(HyperDoc) no terminal for the commands of page %s;"
+                    " set FRICASTERM\n", page->name);
+            return;
+        }
+        accept_menu_server_connection(page);
+        fricas_sleep(100);
+        return;
+    }
+#endif
+    if (TERM == NULL) {
+        TERM = "xterm";
+    }
     if (access(complfile, R_OK) == 0)
 
         /*
@@ -296,11 +321,27 @@ accept_menu_server_connection(HyperDocPage *page)
     char *buf_name;
     HyperDocPage *npage;
 
+#ifdef HYPERDOC_HTML
+    /* the terminal may be missing: wait at most BufferWait seconds */
+    struct timeval tv;
+#endif
+
     if (page->sock != NULL)
         return;
     while (1) {
         rd = server_mask;
+#ifdef HYPERDOC_HTML
+        tv.tv_sec = BufferWait;
+        tv.tv_usec = 0;
+        ret_code = sselect(FD_SETSIZE, &rd, 0, 0, &tv);
+        if (ret_code == 0) {
+            fprintf(stderr, "(HyperDoc) the terminal for page %s did not start\n",
+                    page->name);
+            return;
+        }
+#else
         ret_code = sselect(FD_SETSIZE, &rd, 0, 0, NULL);
+#endif
         if (ret_code == -1) {
             perror("Session manager select");
             continue;

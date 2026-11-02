@@ -39,6 +39,7 @@ int httpd_socket = -1;              /* the listening socket */
 
 static int httpd_port;
 static char access_token[2 * TokenBytes + 1];
+static char root_url[64 + 2 * TokenBytes];
 
 /* read the token from the system's random source; no weak fallback */
 
@@ -96,8 +97,18 @@ httpd_open(void)
     httpd_port = ntohs(addr.sin_port);
     /* a browser that closes the connection early must not end HyperDoc */
     bsdSignal(SIGPIPE, SIG_IGN, RestartSystemCalls);
-    fprintf(stderr, "(HyperDoc) http://127.0.0.1:%d/%s/\n", httpd_port, access_token);
+    snprintf(root_url, sizeof(root_url), "http://127.0.0.1:%d/%s/",
+             httpd_port, access_token);
+    fprintf(stderr, "(HyperDoc) %s\n", root_url);
     return httpd_socket;
+}
+
+/* the address of the root page, with the token */
+
+char *
+httpd_url(void)
+{
+    return root_url;
 }
 
 static const char *
@@ -113,6 +124,7 @@ status_text(int status)
       case 405: return "Method Not Allowed";
       case 408: return "Request Timeout";
       case 413: return "Content Too Large";
+      case 415: return "Unsupported Media Type";
       case 431: return "Request Header Fields Too Large";
       case 501: return "Not Implemented";
       default:  return "Internal Server Error";
@@ -153,7 +165,7 @@ send_response(int fd, HttpResponse *r)
                  "%s%s%s"
                  "Connection: close\r\n"
                  "Cache-Control: no-store\r\n"
-                 "Referrer-Policy: no-referrer\r\n"
+                 "Referrer-Policy: same-origin\r\n"
                  "X-Content-Type-Options: nosniff\r\n"
                  "Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'\r\n"
                  "\r\n",
@@ -237,6 +249,9 @@ read_request(int fd, char *buf, int *len, int *head_len)
             }
         }
     }
+    /* only Content-Length bytes: some browsers (w3m) send CR LF after the body */
+    *len = want;
+    buf[*len] = '\0';
     return 0;
 }
 
@@ -331,6 +346,43 @@ url_decode(char *s)
     return 0;
 }
 
+/*
+ * Split a form body (application/x-www-form-urlencoded) into its
+ * fields, decoded in place.  Returns the number of fields, -1 for a
+ * bad body.
+ */
+
+static int
+parse_form(char *body, FormField *form)
+{
+    int n = 0;
+    char *p = body;
+
+    while (*p) {
+        char *amp = strchr(p, '&');
+        char *eq, *q;
+
+        if (amp != NULL)
+            *amp = '\0';
+        if ((eq = strchr(p, '=')) == NULL || n == MaxFormFields)
+            return -1;
+        *eq = '\0';
+        for (q = p; *q; q++)
+            if (*q == '+')
+                *q = ' ';
+        for (q = eq + 1; *q; q++)
+            if (*q == '+')
+                *q = ' ';
+        if (url_decode(p) == -1 || url_decode(eq + 1) == -1)
+            return -1;
+        form[n].name = p;
+        form[n].value = eq + 1;
+        n++;
+        p = amp != NULL ? amp + 1 : p + strlen(p);
+    }
+    return n;
+}
+
 static const char *
 static_content_type(const char *name)
 {
@@ -386,6 +438,8 @@ static_file(const char *name, HttpResponse *r)
 static void
 handle_request(char *buf, int head_len, HttpResponse *r)
 {
+    static FormField form[MaxFormFields], query_fields[MaxFormFields];
+    int nform, nquery = 0;
     char *method, *path, *version, *line_end, *query;
     char val[256];
     int is_post;
@@ -432,14 +486,23 @@ handle_request(char *buf, int head_len, HttpResponse *r)
     path += 2 * TokenBytes + 2;
     if ((query = strchr(path, '?')) != NULL)
         *query++ = '\0';
-    if (url_decode(path) == -1) {
+    if (url_decode(path) == -1
+        || (query != NULL && (nquery = parse_form(query, query_fields)) == -1)) {
         r->status = 400;
         return;
     }
     if (is_post) {
-        /* actions: step 5; the body starts at buf + head_len */
-        (void) head_len;
-        r->status = 501;
+        /* a form of a HyperDoc window; the body starts at buf + head_len */
+        if (header_value(line_end, "Content-Type:", val, sizeof(val)) == NULL
+            || strcmp(val, "application/x-www-form-urlencoded") != 0) {
+            r->status = 415;
+            return;
+        }
+        if (path[0] != 'w' || (nform = parse_form(buf + head_len, form)) == -1) {
+            r->status = 400;
+            return;
+        }
+        html_window_request(path + 1, query_fields, nquery, form, nform, r);
     }
     else if (path[0] == '\0') {
         static char location[32];
@@ -450,7 +513,7 @@ handle_request(char *buf, int head_len, HttpResponse *r)
         r->location = location;
     }
     else if (path[0] == 'w')
-        html_window_request(path + 1, r);
+        html_window_request(path + 1, query_fields, nquery, NULL, 0, r);
     else if (strncmp(path, "static/", 7) == 0)
         static_file(path + 7, r);
     else if (strncmp(path, "img/", 4) == 0)

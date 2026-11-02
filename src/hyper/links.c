@@ -392,6 +392,51 @@ follow_link(HyperLink *link, int button1)
     }
 }
 
+/*
+ * For the browser's history: is page name on the down link or memo
+ * stack of the window, so that Up reaches it?
+ */
+
+int
+page_on_stack(const char *name)
+{
+    int i;
+
+    for (i = 0; i < gWindow->fDownLinkStackIndex; i++)
+        if (strcmp(gWindow->fDownLinkStack[i]->name, name) == 0)
+            return 1;
+    for (i = 0; i < gWindow->fMemoStackIndex; i++)
+        if (strcmp(gWindow->fMemoStack[i]->name, name) == 0)
+            return 1;
+    return 0;
+}
+
+/* press Up, as the title bar button does; 0 if there is nothing above */
+
+int
+press_up(void)
+{
+    HyperLink up;
+
+    if (gWindow->fDownLinkStackIndex == 0 && gWindow->fMemoStackIndex == 0)
+        return 0;
+    memset(&up, 0, sizeof(up));
+    up.type = Upbutton;
+    follow_link(&up, 1);
+    return 1;
+}
+
+/* show page as a down link to it would */
+
+void
+show_as_downlink(HyperDocPage *page)
+{
+    downlink();
+    gWindow->page = page;
+    display_page(gWindow->page);
+    gWindow->fWindowHashTable = gWindow->page->fLinkHashTable;
+}
+
 /* the links of the buttons in the title bar; moved from titlebar.c */
 
 void

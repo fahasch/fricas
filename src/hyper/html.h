@@ -23,6 +23,15 @@ typedef struct {
     HtmlBuf body;
 } HttpResponse;
 
+/* a field of a submitted form, decoded */
+
+typedef struct {
+    char *name;
+    char *value;
+} FormField;
+
+#define MaxFormFields 1024
+
 /* from httpd.c: the listening socket of the HTTP server */
 extern int httpd_socket;
 

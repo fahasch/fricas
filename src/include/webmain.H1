@@ -1,1 +1,2 @@
-extern void html_window_request(char * path, HttpResponse * r);
+extern void html_window_request(char * path, FormField * query, int nquery, FormField * form, int nform, HttpResponse * r);
+extern int start_terminal(char * title, char * program, char * page_name, char * complfile);

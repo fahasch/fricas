@@ -15,35 +15,56 @@
      */
     --ht-vspace-line: 25px;
     --ht-active: #0000c0;
-    --ht-border: #808080;
+    /* as X11: text colour on white, black lines (titlebar.c, scrollbar.c) */
+    --ht-fg: #000;
+    --ht-bg: #fff;
+    --ht-border: #000;
+    /* the grey dotted pattern of the X11 title bar bitmaps */
+    --ht-stipple: repeating-conic-gradient(var(--ht-fg) 0 25%, var(--ht-bg) 0 50%) 0 0 / 2px 2px;
 }
 
 body.ht-window {
     font-family: serif;
+    color: var(--ht-fg);
+    background: var(--ht-bg);
     margin: 0;
     height: 100vh;
+    box-sizing: border-box;
+    border: 1px solid var(--ht-border);
     display: flex;
     flex-direction: column;
 }
 
+/* title bar: two buttons, the title in a box, two buttons; lines between */
 .ht-titlebar {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     border-bottom: 1px solid var(--ht-border);
-    padding: 2px 4px;
 }
-.ht-title { flex: 1; font-weight: bold; }
+.ht-title {
+    flex: 1;
+    text-align: center;
+    padding: 2px 4px;
+    border-left: 1px solid var(--ht-border);
+    border-right: 1px solid var(--ht-border);
+}
 .ht-button {
     display: inline-block;
     min-width: 4em;
-    padding: 1px 6px;
-    margin: 0 2px;
+    padding: 2px 6px;
     text-align: center;
-    border: 1px solid var(--ht-border);
-    color: var(--ht-active);
+    background: var(--ht-stipple);
+    color: var(--ht-fg);
+    font-weight: bold;
+    /* readable on the pattern */
+    text-shadow: 1px 0 var(--ht-bg), -1px 0 var(--ht-bg), 0 1px var(--ht-bg),
+        0 -1px var(--ht-bg), 1px 1px var(--ht-bg), -1px -1px var(--ht-bg),
+        1px -1px var(--ht-bg), -1px 1px var(--ht-bg);
     text-decoration: none;
 }
-.ht-noop { visibility: hidden; }
+.ht-button + .ht-button { border-left: 1px solid var(--ht-border); }
+/* a button X11 does not show (no Up, no Return): the empty pattern */
+.ht-noop { color: transparent; }
 
 .ht-header, .ht-footer { padding: 4px 20px; }
 .ht-scroll { flex: 1; overflow-y: auto; padding: 4px 20px; }
@@ -59,6 +80,13 @@ body.ht-window {
 }
 .ht-center { text-align: center; }
 .ht-tab { display: inline-block; margin-left: calc(var(--ht-col) * var(--ht-col-unit)); }
+/* the text before a \tab in a line: as wide as the tab's column needs */
+.ht-seg {
+    display: inline-block;
+    white-space: nowrap;
+    text-indent: 0;
+    width: max(0px, calc(var(--ht-w) * var(--ht-col-unit) + var(--ht-wpx) * 1px));
+}
 /* moves, as in X11 also to the left or up: margins, which may be negative */
 .ht-space { display: inline-block; margin-left: calc(var(--ht-n) * var(--ht-col-unit)); }
 .ht-hspace { display: inline-block; margin-left: calc(var(--ht-n) * 1px); }
@@ -74,7 +102,9 @@ body.ht-window {
 
 .ht-table {
     margin-left: calc(var(--ht-ind) * var(--ht-col-unit) + var(--ht-indpx) * 1px);
+    /* as compute_table_extent: as many columns as fit, not more than entries */
     column-width: calc(var(--ht-colw) * var(--ht-col-unit) + 10px);
+    column-count: var(--ht-cells);
     column-gap: 0;
     line-height: var(--ht-line-height);
 }
@@ -91,12 +121,59 @@ body.ht-window {
 .ht-box { border: 1px solid; padding: 0 2px; }
 .ht-mbox { white-space: nowrap; }
 
-/* active areas */
-a.ht-active { color: var(--ht-active); text-decoration: none; }
-a.ht-active:hover { text-decoration: underline; }
-.ht-image { vertical-align: middle; }
-.ht-input {
-    display: inline-block;
-    min-width: 10ch;
-    border: 1px solid var(--ht-border);
+/* active areas; on a page with input fields they are form buttons */
+.ht-form { display: contents; }
+button.ht-active, button.ht-button {
+    font: inherit;
+    line-height: inherit;
+    text-align: inherit;
+    text-indent: 0;
+    background: none;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    color: var(--ht-active);
+    cursor: pointer;
 }
+button.ht-button {
+    min-width: 4em;
+    padding: 2px 6px;
+    text-align: center;
+    background: var(--ht-stipple);
+    color: var(--ht-fg);
+}
+/* the first button of the form: Return in a field stores the values */
+.ht-default {
+    position: absolute;
+    width: 0;
+    height: 0;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    opacity: 0;
+}
+.ht-active { color: var(--ht-active); text-decoration: none; }
+.ht-active:hover { text-decoration: underline; }
+.ht-image { vertical-align: middle; }
+
+/* input fields: the width of \inputstring, as input_string_width */
+.ht-input {
+    font-family: monospace;
+    font-size: inherit;
+    width: calc(var(--ht-size) * 1ch + 10px);
+    /* inverted, as X11 (InputBackground, InputForeground) */
+    color: var(--ht-bg);
+    background: var(--ht-fg);
+    caret-color: var(--ht-bg);
+    border: 1px solid var(--ht-fg);
+    padding: 0 2px;
+    text-indent: 0;
+}
+textarea.ht-input { width: auto; vertical-align: top; }
+
+/* input and radio boxes: the pictures of the two states */
+.ht-check { display: inline-block; cursor: pointer; vertical-align: middle; }
+.ht-check input { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }
+.ht-check input:checked ~ .ht-box-off,
+.ht-check input:not(:checked) ~ .ht-box-on { display: none; }
+.ht-check input:focus-visible ~ * { outline: 1px dotted; }

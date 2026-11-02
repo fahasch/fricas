@@ -144,7 +144,14 @@ static struct {
     int center;                 /* inside \centerline */
     int in_table;               /* inside a table entry: no blocks */
     int in_item;                /* inside \beginitems (gInItem) */
+    int form;                   /* the page has input fields or boxes */
     Length indent;              /* current indent */
+    Length block_indent;        /* the indent of the open ht-line div */
+    Length block_first;         /* and the start of its first line */
+    Length wrap_indent;         /* the indent at its last word */
+    int style_start, style_end; /* its style attribute in out */
+    int seg_start;              /* where the text since the last tab starts */
+    Length seg_x;               /* and its column */
     Length first;               /* start of the next line, relative to indent */
     Length item_indent, item_space;
     ItemLevel *items;
@@ -186,10 +193,37 @@ reopen_inlines(void)
         hb_add(w.out, w.stack[i].open);
 }
 
+/*
+ * X11 wraps a line at the indent of the moment (compute_word_extent);
+ * a page may change it in the middle of a line (a label, then
+ * \indentrel and text).  The div then gets the indent at its last
+ * word, its first line keeps its start.
+ */
+
+static void
+set_wrap_indent(void)
+{
+    char *tail;
+    Length first;
+
+    if (w.wrap_indent.ch == w.block_indent.ch && w.wrap_indent.px == w.block_indent.px)
+        return;
+    first.ch = w.block_indent.ch + w.block_first.ch - w.wrap_indent.ch;
+    first.px = w.block_indent.px + w.block_first.px - w.wrap_indent.px;
+    tail = alloc_string(w.out->data + w.style_end);
+    w.out->len = w.style_start;
+    w.out->data[w.out->len] = '\0';
+    add_length_vars("ind", w.wrap_indent);
+    add_length_vars("first", first);
+    hb_add(w.out, tail);
+    free(tail);
+}
+
 static void
 close_block(void)
 {
     if (w.in_block) {
+        set_wrap_indent();
         close_inlines();
         hb_add(w.out, "</div>\n");
         w.in_block = 0;
@@ -206,13 +240,51 @@ need_block(void)
         return;
     hb_add(w.out, w.center ? "<div class=\"ht-line ht-center\" style=\""
                            : "<div class=\"ht-line\" style=\"");
+    w.style_start = w.out->len;
     add_length_vars("ind", w.indent);
     add_length_vars("first", w.first);
+    w.style_end = w.out->len;
     hb_add(w.out, "\">");
+    w.seg_start = w.out->len;
+    w.seg_x.ch = w.indent.ch + w.first.ch;
+    w.seg_x.px = w.indent.px + w.first.px;
     reopen_inlines();
     w.in_block = 1;
+    w.block_indent = w.indent;
+    w.block_first = w.first;
+    w.wrap_indent = w.indent;
     w.first.ch = 0;
     w.first.px = 0;
+}
+
+/*
+ * A \tab{n} in the middle of a line: X11 moves to the column x (also
+ * back to the left).  The text since the start of the line or the last
+ * tab becomes a segment of the width that reaches x; longer text runs
+ * over, as in X11.
+ */
+
+static void
+tab_in_line(Length x)
+{
+    char open[128];
+    char *tail;
+
+    close_inlines();
+    /* a space for browsers without CSS; at the end of the segment it takes no room */
+    hb_add(w.out, " </span>");
+    snprintf(open, sizeof(open),
+             "<span class=\"ht-seg\" style=\"--ht-w:%g;--ht-wpx:%d\">",
+             x.ch - w.seg_x.ch, x.px - w.seg_x.px);
+    tail = alloc_string(w.out->data + w.seg_start);
+    w.out->len = w.seg_start;
+    w.out->data[w.out->len] = '\0';
+    hb_add(w.out, open);
+    hb_add(w.out, tail);
+    free(tail);
+    w.seg_start = w.out->len;
+    w.seg_x = x;
+    reopen_inlines();
 }
 
 /* start_newline of extent2.c: end the line if it has text */
@@ -312,6 +384,7 @@ write_word(const char *text, int space, const char *cls)
     else
         hb_add_escaped(w.out, text);
     w.in_line = 1;
+    w.wrap_indent = w.indent;
 }
 
 static void
@@ -353,9 +426,12 @@ text_chars(TextNode *node, int ender)
           case Controlbitmap:
           case SimpleBox:
           case Radiobox:
-          case Inputstring:
-            /* a picture or a field: at least two characters wide */
+            /* a picture: about two characters wide */
             n += 2;
+            break;
+          case Inputstring:
+            /* as input_string_width: one character more than the size */
+            n += node->link->reference.string->size + 1;
             break;
           case Endtableitem:
           case Endtable:
@@ -413,7 +489,7 @@ static void
 start_link(TextNode *node)
 {
     char open[160];
-    int active = 1;
+    int active = 1, new_window;
 
     switch (node->type) {
       case Upbutton:
@@ -433,12 +509,23 @@ start_link(TextNode *node)
     need_block();
     if (w.in_line && node->space)
         hb_add(w.out, " ");
-    snprintf(open, sizeof(open),
-             "<a class=\"ht-active %s\" href=\"link/%lu\"%s>",
-             link_class(node->type), (unsigned long) node->link->win,
-             (node->type == Windowlink || node->type == Lispwindowlink)
-             ? " target=\"_blank\"" : "");
-    push_inline(InlineLink, current_font(), open, "</a>");
+    new_window = node->type == Windowlink || node->type == Lispwindowlink;
+    /*
+     * on a page with input fields a link sends their values along; the
+     * button names its link (HTML 2, unlike formaction known to every
+     * browser)
+     */
+    if (w.form)
+        snprintf(open, sizeof(open),
+                 "<button type=\"submit\" class=\"ht-active %s\" name=\"link\" value=\"%lu\"%s>",
+                 link_class(node->type), (unsigned long) node->link->win,
+                 new_window ? " formtarget=\"_blank\"" : "");
+    else
+        snprintf(open, sizeof(open),
+                 "<a class=\"ht-active %s\" href=\"link/%lu\"%s>",
+                 link_class(node->type), (unsigned long) node->link->win,
+                 new_window ? " target=\"_blank\"" : "");
+    push_inline(InlineLink, current_font(), open, w.form ? "</button>" : "</a>");
 }
 
 static void
@@ -454,21 +541,110 @@ write_image(TextNode *node)
     w.in_line = 1;
 }
 
-/* an input box or radio box: the picture of its state (show_simple_box) */
+/*
+ * An input box or radio box (show_simple_box): a check box or radio
+ * button of the form, hidden by the CSS behind the pictures of the
+ * two states; a radio box has the group as name.
+ */
+
+static void
+write_box_image(ImageStruct *image, const char *cls, const char *alt)
+{
+    int n = image ? html_image_number(image->filename) : -1;
+
+    if (n >= 0)
+        hb_printf(w.out, "<img class=\"%s\" src=\"../img/%d.png\" alt=\"%s\">",
+                  cls, n, alt);
+    else
+        hb_printf(w.out, "<span class=\"%s\">%s</span>", cls, alt);
+}
 
 static void
 write_box(TextNode *node)
 {
     InputBox *box = node->link->reference.box;
-    ImageStruct *image = box->picked ? box->selected : box->unselected;
-    int n = image ? html_image_number(image->filename) : -1;
 
     need_block();
     if (w.in_line && node->space)
         hb_add(w.out, " ");
-    if (n >= 0)
-        hb_printf(w.out, "<img class=\"ht-box-image\" src=\"../img/%d.png\" alt=\"%s\">",
-                  n, box->picked ? "[x]" : "[ ]");
+    hb_add(w.out, "<label class=\"ht-check\">");
+    if (box->rbs != NULL) {
+        hb_add(w.out, "<input type=\"radio\" name=\"r:");
+        hb_add_escaped(w.out, box->rbs->name);
+    }
+    else
+        hb_add(w.out, "<input type=\"checkbox\" name=\"b");
+    hb_add(w.out, "\" value=\"");
+    hb_add_escaped(w.out, box->name);
+    hb_printf(w.out, "\"%s>", box->picked ? " checked" : "");
+    write_box_image(box->selected, "ht-box-on", "[x]");
+    write_box_image(box->unselected, "ht-box-off", "[ ]");
+    hb_add(w.out, "</label>");
+    w.in_line = 1;
+}
+
+/*
+ * An input field (show_input): its value as print_to_string reads it,
+ * the lines joined; a line longer than the field ends in '_' and goes
+ * on in the next one (initialize_default).
+ */
+
+static void
+write_input_value(InputItem *item)
+{
+    LineStruct *line;
+
+    for (line = item->lines; line != NULL; line = line->next) {
+        char save = '\0';
+
+        if (line->len > item->size) {
+            save = line->buffer[item->size];
+            line->buffer[item->size] = '\0';
+        }
+        hb_add_escaped(w.out, line->buffer);
+        if (save != '\0')
+            line->buffer[item->size] = save;
+        if (line->len <= item->size && line->next != NULL)
+            hb_add(w.out, "\n");
+    }
+}
+
+static int
+has_newline(InputItem *item)
+{
+    LineStruct *line;
+
+    for (line = item->lines; line != NULL; line = line->next)
+        if (line->len <= item->size && line->next != NULL)
+            return 1;
+    return 0;
+}
+
+static void
+write_input(TextNode *node)
+{
+    InputItem *item = node->link->reference.string;
+
+    need_block();
+    if (w.in_line && node->space)
+        hb_add(w.out, " ");
+    if (has_newline(item)) {
+        /* a value with several lines (Shift-Return in X11) */
+        hb_printf(w.out, "<textarea class=\"ht-input\" rows=\"%d\" cols=\"%d\" name=\"s:",
+                  item->num_lines, item->size);
+        hb_add_escaped(w.out, item->name);
+        hb_add(w.out, "\">");
+        write_input_value(item);
+        hb_add(w.out, "</textarea>");
+    }
+    else {
+        hb_printf(w.out, "<input type=\"text\" class=\"ht-input\" size=\"%d\" "
+                  "style=\"--ht-size:%d\" name=\"s:", item->size, item->size + 1);
+        hb_add_escaped(w.out, item->name);
+        hb_add(w.out, "\" value=\"");
+        write_input_value(item);
+        hb_add(w.out, "\">");
+    }
     w.in_line = 1;
 }
 
@@ -478,7 +654,7 @@ static void
 write_table(TextNode **nodep)
 {
     TextNode *tn;
-    int width = 0;
+    int width = 0, cells = 0;
 
     new_line();
     close_block();
@@ -487,10 +663,12 @@ write_table(TextNode **nodep)
 
         if (n > width)
             width = n;
+        cells++;
         for (; tn->type != Endtableitem; tn = tn->next)
             ;
     }
-    hb_printf(w.out, "<div class=\"ht-table\" style=\"--ht-colw:%d;", width);
+    hb_printf(w.out, "<div class=\"ht-table\" style=\"--ht-colw:%d;--ht-cells:%d;",
+              width, cells);
     add_length_vars("ind", w.indent);
     hb_add(w.out, "\">\n");
     for (tn = (*nodep)->next; tn->type != Endtable; tn = tn->next) {
@@ -616,9 +794,11 @@ write_nodes(TextNode *node, int ender)
 
             x.ch = w.indent.ch + arg_number(node);
             x.px = w.indent.px;
-            if (w.in_block || w.in_table)
+            if (w.in_table)
                 hb_printf(w.out, "<span class=\"ht-tab\" style=\"--ht-col:%d\"></span>",
                           arg_number(node));
+            else if (w.in_block)
+                tab_in_line(x);
             else
                 start_at(x);
             w.in_line = 0;
@@ -819,10 +999,7 @@ write_nodes(TextNode *node, int ender)
             write_box(node);
             break;
           case Inputstring:
-            /* input fields: step 5 */
-            need_block();
-            hb_add(w.out, "<span class=\"ht-input\"></span>");
-            w.in_line = 1;
+            write_input(node);
             break;
 
           case Ifcond:
@@ -889,11 +1066,17 @@ write_region(const char *cls, TextNode *node, int ender)
 static void
 write_title_button(Window id, const char *cls, const char *label, int active)
 {
-    if (active)
+    if (active && w.form)
+        hb_printf(w.out, "<button type=\"submit\" class=\"ht-button %s\" "
+                  "name=\"link\" value=\"%lu\">%s</button>",
+                  cls, (unsigned long) id, label);
+    else if (active)
         hb_printf(w.out, "<a class=\"ht-button %s\" href=\"link/%lu\">%s</a>",
                   cls, (unsigned long) id, label);
     else
         hb_add(w.out, "<span class=\"ht-button ht-noop\"></span>");
+    /* for browsers without CSS; the title bar is a flex box */
+    hb_add(w.out, "\n");
 }
 
 /* the HTML document of the current page of gWindow */
@@ -904,12 +1087,27 @@ html_write_page(HtmlBuf *out)
     HyperDocPage *page = gWindow->page;
 
     w.out = out;
+    w.form = page->input_list != NULL || page->box_hash != NULL;
     hb_add(out, "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>");
     hb_add_escaped(out, page->name);
     hb_add(out, "</title>\n"
            "<link rel=\"stylesheet\" href=\"../static/hyperdoc.css\">\n"
            "<script src=\"../static/hyperdoc.js\" defer></script>\n"
-           "</head>\n<body class=\"ht-window\">\n<div class=\"ht-titlebar\">");
+           "</head>\n<body class=\"ht-window\">\n");
+    if (w.form) {
+        /*
+         * One form around the page: every link is a submit button that
+         * sends the values of the fields and boxes.  The page name
+         * keeps them off another page; Return in a field only
+         * stores them, through the first button.
+         */
+        hb_add(out, "<form class=\"ht-form\" method=\"post\" action=\"./\">\n"
+               "<input type=\"hidden\" name=\"page\" value=\"");
+        hb_add_escaped(out, page->name);
+        hb_add(out, "\">\n<button type=\"submit\" class=\"ht-default\" "
+               "tabindex=\"-1\" aria-hidden=\"true\"></button>\n");
+    }
+    hb_add(out, "<div class=\"ht-titlebar\">");
     write_title_button(gWindow->fTitleBarButton1, "ht-quit", "Exit", 1);
     write_title_button(gWindow->fTitleBarButton2, "ht-help", "Help", need_help_button);
     write_region("ht-title", page->title, Endtitle);
@@ -919,6 +1117,8 @@ html_write_page(HtmlBuf *out)
     write_region("ht-header", page->header, Endheader);
     write_region("ht-scroll", page->scrolling, Endscrolling);
     write_region("ht-footer", page->footer, Endfooter);
+    if (w.form)
+        hb_add(out, "</form>\n");
     hb_add(out, "</body>\n</html>\n");
 }
 

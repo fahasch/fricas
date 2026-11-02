@@ -1,5 +1,22 @@
 2026-11-02  Fabian Hassler  <fahasch@yahoo.de>
 
+	HyperDoc in the web browser: forms, examples and search
+	* src/hyper/html.c: Input fields, boxes and links as one form
+	per page; tab columns and tables without script; look as X11
+	* src/hyper/webmain.c: Store submitted values, follow the
+	pressed link, Back button as Up, open the browser, terminal for
+	example commands
+	* src/hyper/httpd.c: POST forms, read the body only up to
+	Content-Length
+	* src/hyper/links.c: page_on_stack, press_up, show_as_downlink
+	* src/hyper/spadint.c: Without X11 run spadbuf in the terminal
+	of the system; time limit for its connection
+	* src/hyper/html.h, src/hyper/www/hyperdoc.css,
+	src/hyper/www/hyperdoc.js, src/include/httpd.H1,
+	src/include/links.H1, src/include/webmain.H1: Adjust
+
+2026-11-02  Fabian Hassler  <fahasch@yahoo.de>
+
 	HyperDoc in the web browser: pages, links and pictures
 	* src/hyper/html.c, src/hyper/www/hyperdoc.css,
 	src/hyper/www/hyperdoc.js: HTML writer over the node tree
