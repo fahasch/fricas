@@ -1,5 +1,8 @@
 extern void hb_addn(HtmlBuf * b, const char * s, int n);
 extern void hb_add(HtmlBuf * b, const char * s);
+extern void hb_printf(HtmlBuf * b, const char * fmt, ...);
 extern void hb_add_escaped(HtmlBuf * b, const char * s);
 extern void hb_free(HtmlBuf * b);
-extern void html_page_response(const char * name, HttpResponse * r);
+extern void html_write_page(HtmlBuf * out);
+extern int html_image_number(const char * name);
+extern void html_image_response(const char * name, HttpResponse * r);

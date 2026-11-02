@@ -336,10 +336,7 @@ make_link_window(TextNode *link_node, int type, int isSubWin)
             fprintf(stderr, "(HyperDoc) Ran out of memory allocating a hypertext link!\n");
             exit(-1);
         }
-        if (isSubWin)
-            link->win = make_link_subwindow();
-        else
-            link->win = 0;
+        link->win = make_link_subwindow(isSubWin);
         link->type = type;
         link->x = link->y = 0;
         link->reference.node = link_node;
@@ -360,7 +357,7 @@ make_paste_window(PasteNode *paste)
             fprintf(stderr, "(HyperDoc) Ran out of memory allocating a hypertext link!\n");
             exit(-1);
         }
-        link->win = make_link_subwindow();
+        link->win = make_link_subwindow(1);
         link->type = Pastebutton;
         link->x = link->y = 0;
         link->reference.paste = paste;

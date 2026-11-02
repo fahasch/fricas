@@ -1,0 +1,1 @@
+extern void html_window_request(char * path, HttpResponse * r);

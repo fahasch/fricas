@@ -1018,13 +1018,18 @@ is_it_850(XFontStruct *fontarg)
  * browser variant defines the same functions without X11.
  */
 
-/* an unmapped window that catches clicks on a link */
+/*
+ * An unmapped window that catches clicks on a link; 0 for a link
+ * without its own window (found by its position in the page).
+ */
 
 Window
-make_link_subwindow(void)
+make_link_subwindow(int is_sub)
 {
     XSetWindowAttributes at;
 
+    if (!is_sub)
+        return 0;
     at.cursor = gActiveCursor;
     at.event_mask = ButtonPress;
     return XCreateWindow(gXDisplay, gWindow->fDisplayedWindow, 0, 0, 100, 100,

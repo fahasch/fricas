@@ -18,7 +18,9 @@
 
 #include "all_hyper_proto.H1"
 #include "sockio-c.H1"
+#include "html.H1"
 #include "httpd.H1"
+#include "webmain.H1"
 
 /* globals of initx.c used by the shared files */
 
@@ -55,6 +57,8 @@ initializeWindowSystem(void)
 {
     if (httpd_open() == -1)
         exit(-1);
+    /* initx.c does this when it loads the fonts */
+    init_group_stack();
 }
 
 void
@@ -95,15 +99,22 @@ init_top_window(char *name)
     gWindow->fMainWindow = new_window_id();
     gWindow->fScrollWindow = gWindow->fMainWindow;
     gWindow->fDisplayedWindow = gWindow->fMainWindow;
+    gWindow->fTitleBarButton1 = new_window_id();
+    gWindow->fTitleBarButton2 = new_window_id();
+    gWindow->fTitleBarButton3 = new_window_id();
+    gWindow->fTitleBarButton4 = new_window_id();
     hash_insert(&gSessionHashTable, (char *)gWindow, (char *) &gWindow->fMainWindow);
     return 1;
 }
 
 /* the functions that hide X11 from the shared files, see initx.c */
 
+/* every link gets a number: it names the link in the URL */
+
 Window
-make_link_subwindow(void)
+make_link_subwindow(int is_sub)
 {
+    (void) is_sub;
     return new_window_id();
 }
 
@@ -144,14 +155,100 @@ display_is_mono(void)
 }
 
 /*
- * The loop of mainEventLoop in event.c without X11: wait for the
- * browser, the FriCAS image and the session manager.
+ * As exitHyperDoc in event.c: close the current HyperDoc window; the
+ * last one ends the program.
  */
+
+void
+exitHyperDoc(void)
+{
+    if (gSessionHashTable.num_entries == 1 || gParentWindow == gWindow) {
+        free_hd_window(gWindow);
+        exit(0);
+    }
+    hash_delete(&gSessionHashTable, (char *)&gWindow->fMainWindow);
+    free_hd_window(gWindow);
+    gWindow = NULL;
+    gActiveWindow = -1;
+}
+
+/*
+ * A request for HyperDoc window n, path "<n>/" (its current page),
+ * "<n>/link/<id>" (a click on the link with that id) or "<n>/goto/<name>"
+ * (page <name> in a new window); the last two redirect to the page
+ * that is shown now.
+ */
+
+void
+html_window_request(char *path, HttpResponse *r)
+{
+    static char location[64];
+    static int version = 0;
+    HDWindow *htw;
+    HyperLink *link;
+    Window id;
+    char *rest;
+
+    id = strtoul(path, &rest, 10);
+    if (rest == path || *rest != '/') {
+        r->status = 404;
+        return;
+    }
+    htw = (HDWindow *) hash_find(&gSessionHashTable, (char *) &id);
+    if (htw == NULL) {
+        r->status = 404;
+        return;
+    }
+    gWindow = htw;
+    rest++;
+    if (*rest == '\0') {
+        display_page(gWindow->page);
+        r->status = 200;
+        r->content_type = "text/html; charset=utf-8";
+        html_write_page(&r->body);
+        return;
+    }
+    if (strncmp(rest, "goto/", 5) == 0) {
+        /* open page <name> in a new window, as the help key does */
+        make_window_link(rest + 5);
+        snprintf(location, sizeof(location), "../../w%lu/?v=%d",
+                 (unsigned long) gWindow->fMainWindow, ++version);
+        r->status = 303;
+        r->location = location;
+        return;
+    }
+    if (strncmp(rest, "link/", 5) != 0) {
+        r->status = 404;
+        return;
+    }
+    id = strtoul(rest + 5, &rest, 10);
+    link = (HyperLink *) hash_find(gWindow->page->fLinkHashTable, (char *) &id);
+    if (link != NULL && *rest == '\0')
+        follow_link(link, 1);
+    if (gWindow == NULL)
+        gWindow = gParentWindow;
+    snprintf(location, sizeof(location), "../../w%lu/?v=%d",
+             (unsigned long) gWindow->fMainWindow, ++version);
+    r->status = 303;
+    r->location = location;
+}
+
+/*
+ * The loop of mainEventLoop in event.c without X11: wait for the
+ * browser, the FriCAS image and the session manager.  A HyperDoc that
+ * is not connected to FriCAS (e.g. started by )hd while another one
+ * holds the connection) has no window that the user could close: it
+ * ends when the process that started it is gone.
+ */
+
+#define OrphanCheck 5           /* seconds between the checks */
 
 void
 mainEventLoop(void)
 {
     fd_set rd;
+    struct timeval tv;
+    int ret;
 
     gActiveWindow = -1;
     while (1) {
@@ -163,9 +260,17 @@ mainEventLoop(void)
             FD_SET(spad_socket->socket, &rd);
         if (session_server)
             FD_SET(session_server->socket, &rd);
-        if (sselect(FD_SETSIZE, &rd, NULL, NULL, NULL) == -1) {
+        tv.tv_sec = OrphanCheck;
+        tv.tv_usec = 0;
+        ret = sselect(FD_SETSIZE, &rd, NULL, NULL, spad_socket ? NULL : &tv);
+        if (ret == -1) {
             free_hd_window(gWindow);
             exit(1);
+        }
+        if (ret == 0) {
+            if (getppid() == 1)
+                exit(0);
+            continue;
         }
         if (FD_ISSET(httpd_socket, &rd))
             httpd_serve();

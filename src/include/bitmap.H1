@@ -1,0 +1,1 @@
+extern char * read_bitmap_data(FILE * fd, int * width, int * height);

@@ -261,40 +261,6 @@ showTitleBar(void)
 #endif
 }
 
-void
-linkTitleBarWindows(void)
-{
-    HyperLink *tw1link = (HyperLink *) halloc(sizeof(HyperLink), "HyperLink"),
-              *tw2link = (HyperLink *) halloc(sizeof(HyperLink), "HyperLink"),
-              *tw3link = (HyperLink *) halloc(sizeof(HyperLink), "HyperLink"),
-              *tw4link = (HyperLink *) halloc(sizeof(HyperLink), "HyperLink");
-
-    tw1link->win = gWindow->fTitleBarButton1;
-    tw1link->type = Quitbutton;
-    tw1link->reference.node = NULL;
-    tw1link->x = tw1link->y = 0;
-
-    tw2link->win = gWindow->fTitleBarButton2;
-    tw2link->type = Helpbutton;
-    tw2link->reference.node = NULL;
-    tw2link->x = tw2link->y = 0;
-
-    tw3link->win = gWindow->fTitleBarButton3;
-    tw3link->type = Returnbutton;
-    tw3link->reference.node = NULL;
-    tw3link->x = tw3link->y = 0;
-
-    tw4link->win = gWindow->fTitleBarButton4;
-    tw4link->type = Upbutton;
-    tw4link->reference.node = NULL;
-    tw4link->x = tw4link->y = 0;
-
-    hash_insert(gLinkHashTable, (char *)tw1link,(char *) &tw1link->win);
-    hash_insert(gLinkHashTable, (char *)tw2link,(char *) &tw2link->win);
-    hash_insert(gLinkHashTable, (char *)tw3link,(char *) &tw3link->win);
-    hash_insert(gLinkHashTable, (char *)tw4link,(char *) &tw4link->win);
-}
-
 static void
 readTitleBarImages(void)
 {

@@ -208,6 +208,7 @@ The page you requested was not found in the \HyperName{} database.
 \newcommand{\Large}{}
 \newcommand{\TeX}{TeX}
 \newcommand{\allowbreak}{}
+\newcommand{\texttt}[1]{{\tt #1}}
 \newcommand{\aleph}{\inputbitmap{\htbmdir{}/aleph.bitmap}}
 \newcommand{\alpha}{\inputbitmap{\htbmdir{}/alpha.bitmap}}
 \newcommand{\angle}{\inputbitmap{\htbmdir{}/angle.bitmap}}

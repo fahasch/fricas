@@ -1,0 +1,5 @@
+extern void helpForHyperDoc(void);
+extern void make_window_link(char * name);
+extern void quitHyperDoc(void);
+extern void follow_link(HyperLink * link, int button1);
+extern void linkTitleBarWindows(void);

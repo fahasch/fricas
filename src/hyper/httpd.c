@@ -26,6 +26,7 @@
 #include "all_hyper_proto.H1"
 #include "html.H1"
 #include "httpd.H1"
+#include "webmain.H1"
 #include "bsdsignal.h"
 #include "bsdsignal.H1"
 
@@ -105,6 +106,7 @@ status_text(int status)
     switch (status) {
       case 200: return "OK";
       case 302: return "Found";
+      case 303: return "See Other";
       case 400: return "Bad Request";
       case 403: return "Forbidden";
       case 404: return "Not Found";
@@ -153,7 +155,7 @@ send_response(int fd, HttpResponse *r)
                  "Cache-Control: no-store\r\n"
                  "Referrer-Policy: no-referrer\r\n"
                  "X-Content-Type-Options: nosniff\r\n"
-                 "Content-Security-Policy: default-src 'self'\r\n"
+                 "Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'\r\n"
                  "\r\n",
                  r->status, status_text(r->status),
                  r->content_type ? r->content_type : "text/plain; charset=utf-8",
@@ -440,13 +442,19 @@ handle_request(char *buf, int head_len, HttpResponse *r)
         r->status = 501;
     }
     else if (path[0] == '\0') {
+        static char location[32];
+
+        snprintf(location, sizeof(location), "w%lu/",
+                 (unsigned long) gParentWindow->fMainWindow);
         r->status = 302;
-        r->location = "page/RootPage";
+        r->location = location;
     }
-    else if (strncmp(path, "page/", 5) == 0)
-        html_page_response(path + 5, r);
+    else if (path[0] == 'w')
+        html_window_request(path + 1, r);
     else if (strncmp(path, "static/", 7) == 0)
         static_file(path + 7, r);
+    else if (strncmp(path, "img/", 4) == 0)
+        html_image_response(path + 4, r);
     else
         r->status = 404;
 }

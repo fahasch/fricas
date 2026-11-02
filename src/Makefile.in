@@ -26,7 +26,8 @@ util-ht:
 	$(mkinstalldirs) $(fricas_target_datadir)
 	cd doc && ${MAKE} util-ht
 
-all-hyper: all-lib all-sman all-graph
+# the graphics only if configure builds them (not without X11)
+all-hyper: all-lib all-sman $(filter all-graph, @fricas_src_all@)
 	$(mkinstalldirs) $(fricas_target_bindir)
 	$(mkinstalldirs) $(fricas_target_datadir)
 	cd hyper && ${MAKE}

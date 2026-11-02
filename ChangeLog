@@ -1,5 +1,29 @@
 2026-11-02  Fabian Hassler  <fahasch@yahoo.de>
 
+	HyperDoc in the web browser: pages, links and pictures
+	* src/hyper/html.c, src/hyper/www/hyperdoc.css,
+	src/hyper/www/hyperdoc.js: HTML writer over the node tree
+	* src/hyper/links.c: New file, link handling moved from event.c
+	and titlebar.c
+	* src/hyper/bitmap.c: New file, bitmap reading moved from
+	ReadBitmap.c
+	* src/hyper/image.c: New file, pictures as PNG
+	* src/hyper/webmain.c, src/hyper/httpd.c: Window and link
+	requests
+	* src/hyper/event.c, src/hyper/initx.c, src/hyper/parse-aux.c,
+	src/hyper/ReadBitmap.c, src/hyper/titlebar.c,
+	src/hyper/Makefile.in: Adjust
+	* src/include/bitmap.H1, src/include/links.H1,
+	src/include/webmain.H1: New files
+	src/include/all_hyper_proto.H1, src/include/event.H1,
+	src/include/html.H1, src/include/initx.H1,
+	src/include/titlebar.H1: Adjust
+	* src/Makefile.in: HyperDoc needs the graphics only if they
+	are built
+	* src/doc/ht/util.ht: Add \texttt
+
+2026-11-02  Fabian Hassler  <fahasch@yahoo.de>
+
 	HyperDoc in the web browser: program structure and HTTP server
 	* configure.ac, configure: New option --with-hyperdoc=x11|html
 	* src/hyper/Makefile.in: Build x11 or html variant of hypertex

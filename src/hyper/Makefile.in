@@ -25,18 +25,18 @@ build_libdir = $(abs_top_builddir)/src/lib
 # The shared files are compiled in both variants.
 HYPERDOC_VARIANT = @HYPERDOC_VARIANT@
 
-hypertex_shared_sources = addfile.c cond.c group.c halloc.c hash.c \
-		hterror.c htinp.c hyper.c item.c lex.c macro.c mem.c \
-		parse.c parse-aux.c parse-input.c parse-paste.c \
+hypertex_shared_sources = addfile.c bitmap.c cond.c group.c halloc.c hash.c \
+		hterror.c htinp.c hyper.c item.c lex.c links.c macro.c \
+		mem.c parse.c parse-aux.c parse-input.c parse-paste.c \
 		parse-types.c spadint.c
 hypertex_x11_sources = dialog.c display.c event.c extent1.c extent2.c \
 		form-ext.c initx.c input.c keyin.c ReadBitmap.c \
 		scrollbar.c show-types.c titlebar.c
-hypertex_html_sources = html.c httpd.c webmain.c
+hypertex_html_sources = html.c httpd.c image.c webmain.c
 
 # files the HTTP server of the html variant serves under static/
 wwwdir = $(fricas_target_datadir)/hypertex/www
-WWWFILES = $(wwwdir)/hyperdoc.css
+WWWFILES = $(wwwdir)/hyperdoc.css $(wwwdir)/hyperdoc.js
 
 ifeq ($(HYPERDOC_VARIANT),html)
 hypertex_sources = $(hypertex_shared_sources) $(hypertex_html_sources)
