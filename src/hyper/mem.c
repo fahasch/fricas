@@ -647,6 +647,7 @@ alloc_paste_node(char *name)
   pastenode->item_stack = NULL;
   pastenode->arg_node = NULL;
   pastenode->end_node = NULL;
+  pastenode->patch_nodes = NULL;
   pastenode->name = alloc_string(name);
   pastenode->haspaste = pastenode->hasbutton = 0;
   return pastenode;

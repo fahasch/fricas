@@ -186,20 +186,23 @@ exitHyperDoc(void)
  * to the page shown now.
  */
 
-static FormField *form_fields;
-static int form_count;
+/* the value of field name (with this value, if not NULL), or NULL */
 
 static char *
-form_value(const char *name, const char *value)
+field_value(FormField *f, int n, const char *name, const char *value)
 {
     int i;
 
-    for (i = 0; i < form_count; i++)
-        if (strcmp(form_fields[i].name, name) == 0
-            && (value == NULL || strcmp(form_fields[i].value, value) == 0))
-            return form_fields[i].value;
+    for (i = 0; i < n; i++)
+        if (strcmp(f[i].name, name) == 0
+            && (value == NULL || strcmp(f[i].value, value) == 0))
+            return f[i].value;
     return NULL;
 }
+
+/* the form being stored, for store_box */
+static FormField *form_fields;
+static int form_count;
 
 /* the browser sends UTF-8; HyperDoc keeps Latin-1 (as hb_add_escaped) */
 
@@ -229,24 +232,23 @@ store_box(void *data)
     char *value;
 
     if (box->rbs == NULL)
-        box->picked = form_value("b", box->name) != NULL;
+        box->picked = field_value(form_fields, form_count, "b", box->name) != NULL;
     else if (snprintf(name, sizeof(name), "r:%s", box->rbs->name) < (int) sizeof(name)
-             && (value = form_value(name, NULL)) != NULL)
+             && (value = field_value(form_fields, form_count, name, NULL)) != NULL)
         box->picked = strcmp(value, box->name) == 0;
 }
 
-static void
+static int
 store_form(FormField *form, int nform)
 {
     HyperDocPage *page = gWindow->page;
-    char *page_name;
+    char *page_name = field_value(form, nform, "page", NULL);
     int i;
 
+    if (page_name == NULL || strcmp(page_name, page->name) != 0)
+        return 0;
     form_fields = form;
     form_count = nform;
-    page_name = form_value("page", NULL);
-    if (page_name == NULL || strcmp(page_name, page->name) != 0)
-        return;
     for (i = 0; i < nform; i++) {
         InputItem *item;
 
@@ -265,6 +267,7 @@ store_form(FormField *form, int nform)
     }
     if (page->box_hash != NULL)
         hash_map(page->box_hash, store_box);
+    return 1;
 }
 
 /*
@@ -301,12 +304,6 @@ shown_slot(Window win)
     shown[i].v = 0;
     shown[i].page = NULL;
     return i;
-}
-
-static int *
-shown_number(Window win)
-{
-    return &shown[shown_slot(win)].v;
 }
 
 /*
@@ -347,10 +344,10 @@ page_location(const char *prefix)
  * X11 keeps the scroll position of a page while it is on the page
  * stack, and a click that keeps the page does not move it.  Here the
  * browser loads the page again; the address then names a place on it:
- * the clicked link ("#l<id>", the id of the link element), the clicked
- * show/hide button ("#paste<k>", html_paste_number, since show/hide
- * parses the page part again), or, when Up, Return or the browser's
- * Back button leads back to a page, the link last clicked on it.
+ * the clicked link ("#l<id>", the id of the link element), or, when Up
+ * or Return leads back to a page, the link last clicked on it (the
+ * browser's Back button keeps the browser's own place).  Show/hide of
+ * an example needs no request (html.c, write_toggle).
  */
 
 #define MaxClicks 256
@@ -412,7 +409,6 @@ follow_link_request(HyperLink *link, const char *prefix, HttpResponse *r)
     HDWindow *window = gWindow;
     HyperDocPage *page = gWindow->page;
     Window id = link->win;
-    int k = html_paste_number(link);
     int type = link->type;
     char *location;
 
@@ -420,11 +416,7 @@ follow_link_request(HyperLink *link, const char *prefix, HttpResponse *r)
     follow_link(link, 1);
     if (gWindow == NULL)
         gWindow = gParentWindow;
-    if (k > 0) {
-        location = page_location(prefix);
-        sprintf(location + strlen(location), "#paste%d", k);
-    }
-    else if (gWindow == window && gWindow->page == page)
+    if (gWindow == window && gWindow->page == page)
         location = page_location_at(prefix, id);
     else if (gWindow == window && (type == Upbutton || type == Returnbutton))
         location = page_location_at(prefix, last_click(gWindow->page));
@@ -435,15 +427,17 @@ follow_link_request(HyperLink *link, const char *prefix, HttpResponse *r)
     r->location = location;
 }
 
-static char *
-field_value(FormField *f, int n, const char *name)
-{
-    int i;
+/* the link of the current page named by the number s, or NULL */
 
-    for (i = 0; i < n; i++)
-        if (strcmp(f[i].name, name) == 0)
-            return f[i].value;
-    return NULL;
+static HyperLink *
+find_link(const char *s)
+{
+    char *end;
+    Window id = strtoul(s, &end, 10);
+
+    if (end == s || *end != '\0')
+        return NULL;
+    return (HyperLink *) hash_find(gWindow->page->fLinkHashTable, (char *) &id);
 }
 
 /*
@@ -455,7 +449,7 @@ field_value(FormField *f, int n, const char *name)
 static void
 go_to_named_page(const char *name, const char *number)
 {
-    int *cur = shown_number(gWindow->fMainWindow);
+    int *cur = &shown[shown_slot(gWindow->fMainWindow)].v;
     HyperDocPage *page;
 
     if (strcmp(gWindow->page->name, name) == 0)
@@ -512,34 +506,27 @@ html_window_request(char *path, FormField *query, int nquery,
         return;
     }
     if (form != NULL) {
-        store_form(form, nform);
+        int stored = store_form(form, nform);
+
         if (*rest == '\0') {
             /* the button that was pressed names its link (html.c) */
-            number = field_value(form, nform, "link");
-            if (number != NULL) {
-                id = strtoul(number, &rest, 10);
-                link = (HyperLink *) hash_find(gWindow->page->fLinkHashTable, (char *) &id);
-                if (link != NULL && *rest == '\0') {
-                    follow_link_request(link, "../", r);
-                    return;
-                }
-            }
-            /*
-             * Return in a field: the values are stored; the browser
-             * stays where it is, with the cursor in the field, as X11
-             */
-            name = field_value(form, nform, "page");
-            if (number == NULL && name != NULL && strcmp(name, gWindow->page->name) == 0) {
+            number = field_value(form, nform, "link", NULL);
+            if (number != NULL && (link = find_link(number)) != NULL)
+                follow_link_request(link, "../", r);
+            else if (number == NULL && stored)
+                /*
+                 * Return in a field: the values are stored; the browser
+                 * stays where it is, with the cursor in the field, as X11
+                 */
                 r->status = 204;
-                return;
-            }
-            r->location = page_location("../");
+            else
+                r->location = page_location("../");
             return;
         }
     }
     if (*rest == '\0') {
-        name = field_value(query, nquery, "p");
-        number = field_value(query, nquery, "v");
+        name = field_value(query, nquery, "p", NULL);
+        number = field_value(query, nquery, "v", NULL);
         if (name != NULL)
             go_to_named_page(name, number);
         if (gWindow == NULL)
@@ -550,24 +537,21 @@ html_window_request(char *path, FormField *query, int nquery,
             r->location = page_location("../");
             return;
         }
-        *shown_number(id) = number != NULL ? atoi(number) : ++last_v;
+        shown[shown_slot(id)].v = number != NULL ? atoi(number) : ++last_v;
         display_page(gWindow->page);
         shown[shown_slot(id)].page = gWindow->page;
         r->status = 200;
         r->content_type = "text/html; charset=utf-8";
-        html_field_focus = anchored_window != id;
+        /* shown at a place: no field takes the keyboard (it would scroll) */
+        html_write_page(&r->body, anchored_window != id);
         anchored_window = 0;
-        html_write_page(&r->body);
-        html_field_focus = 1;
         return;
     }
     if (strncmp(rest, "goto/", 5) == 0)
         /* open page <name> in a new window, as the help key does */
         make_window_link(rest + 5);
     else if (strncmp(rest, "link/", 5) == 0) {
-        id = strtoul(rest + 5, &rest, 10);
-        link = (HyperLink *) hash_find(gWindow->page->fLinkHashTable, (char *) &id);
-        if (link != NULL && *rest == '\0') {
+        if ((link = find_link(rest + 5)) != NULL) {
             follow_link_request(link, "../../", r);
             return;
         }

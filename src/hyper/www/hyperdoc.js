@@ -1,10 +1,10 @@
 /*
  * hyperdoc.js: optional; the pages work without it.
  *
- * After a click that keeps the page (show/hide of an example, a command)
- * the server answers with the page address plus the place ("#paste<k>",
- * "#l<id>"), and the browser shows that place near the top.  The
- * script keeps it where it was on the screen, as X11 does.
+ * After a click that keeps the page (a command) the server answers with
+ * the page address plus the clicked link ("#l<id>"), and the browser
+ * shows it near the top.  The script keeps it where it was on the
+ * screen, as X11 does.
  *
  * A link that opens
  * a new HyperDoc window (\windowlink, ...; target or formtarget
@@ -59,19 +59,15 @@ document.addEventListener("submit", function (event) {
     }
 });
 
-const htPasteKey = "hyperdoc-place";
+const htPlaceKey = "hyperdoc-place";
 
 document.addEventListener("click", function (event) {
     const link = event.target.closest(".ht-active");
     if (!link || !link.id)
         return;
-    /* a show/hide button: the place is the anchor in front of it */
-    const before = link.previousElementSibling;
-    const place = link.classList.contains("ht-pastebutton") && before
-        && before.classList.contains("ht-anchor") ? before : link;
     try {
-        sessionStorage.setItem(htPasteKey, JSON.stringify(
-            {id: place.id, top: place.getBoundingClientRect().top}));
+        sessionStorage.setItem(htPlaceKey, JSON.stringify(
+            {id: link.id, top: link.getBoundingClientRect().top}));
     } catch (e) {
         /* without storage the browser's place is kept */
     }
@@ -80,17 +76,17 @@ document.addEventListener("click", function (event) {
 window.addEventListener("load", function () {
     let saved = null;
     try {
-        saved = JSON.parse(sessionStorage.getItem(htPasteKey));
-        sessionStorage.removeItem(htPasteKey);
+        saved = JSON.parse(sessionStorage.getItem(htPlaceKey));
+        sessionStorage.removeItem(htPlaceKey);
     } catch (e) {
         return;
     }
     if (!saved || location.hash !== "#" + saved.id)
         return;
-    const anchor = document.getElementById(saved.id);
-    const scroll = anchor && anchor.closest(".ht-scroll");
+    const link = document.getElementById(saved.id);
+    const scroll = link && link.closest(".ht-scroll");
     if (scroll)
-        scroll.scrollTop += anchor.getBoundingClientRect().top - saved.top;
+        scroll.scrollTop += link.getBoundingClientRect().top - saved.top;
 });
 
 /*

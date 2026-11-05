@@ -49,6 +49,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "all_hyper_proto.H1"
 
 static void load_patch(PatchStore * patch);
+static PatchStore *open_patch(TextNode *arg_node);
+static TextNode *parse_patch_nodes(char *name, TextNode **last);
 
 extern FILE *cfile;
 short int gInPaste;
@@ -207,7 +209,7 @@ parse_pastebutton(void)
 HyperDocPage *
 parse_patch(PasteNode *paste)
 {
-    TextNode *new;
+    TextNode *new, *last;
     TextNode *end_node;
     TextNode *begin_node;
     TextNode *arg_node;
@@ -217,8 +219,6 @@ parse_patch(PasteNode *paste)
     int where = paste->where;
     GroupItem *g = paste->group;
     ItemStack *is = paste->item_stack;
-    PatchStore *patch;
-    char *patch_name;
     int ret_value = 1;
 
     /* prepare to throw away the current paste node */
@@ -232,17 +232,10 @@ parse_patch(PasteNode *paste)
 
     switch (where) {
       case FromFile:
-        patch_name = print_to_string(arg_node);
-        patch = (PatchStore *) hash_find(gWindow->fPatchHashTable, patch_name);
-        if (!patch) {
-            fprintf(stderr, "(HyperDoc) Unknown patch name %s\n", patch_name);
+        if (open_patch(arg_node) == NULL) {
             BeepAtTheUser();
             return 0;
         }
-        if (!patch->loaded)
-            load_patch(patch);
-        input_type = FromString;
-        input_string = patch->string;
         break;
       case FromSpadSocket:
         input_type = FromSpadSocket;
@@ -288,10 +281,59 @@ parse_patch(PasteNode *paste)
 
     init_parse_patch(gWindow->page);
     init_paste_item(paste_item);
+    new = parse_patch_nodes(paste->name, &last);
+
+    /* Once I am back, I need only reallign all the text structures */
+    last->type = Noop;
+    last->next = next_node;
+    begin_node->next = new;
+    begin_node->type = Noop;
+    free(begin_node->data.text);
+    begin_node->data.text = 0;
+
+    gWindow->fDisplayedWindow = gWindow->fScrollWindow;
+
+    repaste_item();
+
+    paste_page(begin_node);
+
+    /* so now I should just be able to disappear */
+    return gWindow->page;
+}
+
+/* let the scanner read the patch named by arg_node; NULL if unknown */
+
+static PatchStore *
+open_patch(TextNode *arg_node)
+{
+    char *name = print_to_string(arg_node);
+    PatchStore *patch = (PatchStore *) hash_find(gWindow->fPatchHashTable, name);
+
+    if (!patch) {
+        fprintf(stderr, "(HyperDoc) Unknown patch name %s\n", name);
+        return NULL;
+    }
+    if (!patch->loaded)
+        load_patch(patch);
+    input_type = FromString;
+    input_string = patch->string;
+    return patch;
+}
+
+/*
+ * Parse the patch that the scanner reads now (from input_string or the
+ * socket) into a new node list; *last is its last node.
+ */
+
+static TextNode *
+parse_patch_nodes(char *name, TextNode **last)
+{
+    TextNode *new;
+
     get_token();
     if (token.type != Patch) {
         fprintf(stderr, "(HyperDoc) Pastebutton %s was expecting a patch\n",
-                paste->name);
+                name);
         jump();
     }
     if (input_type == FromString) {
@@ -322,23 +364,35 @@ parse_patch(PasteNode *paste)
     new = alloc_node();
     curr_node = new;
     parse_HyperDoc();
+    *last = curr_node;
+    return new;
+}
 
-    /* Once I am back, I need only reallign all the text structures */
-    curr_node->type = Noop;
-    curr_node->next = next_node;
-    begin_node->next = new;
-    begin_node->type = Noop;
-    free(begin_node->data.text);
-    begin_node->data.text = 0;
+/*
+ * For the browser variant, which writes both versions of a paste: the
+ * patch of a paste read from a file, parsed as part of the current page
+ * into a node list that ends with an Endpatch node, without changing
+ * the page as parse_patch does.  Parsed once; NULL if there is no such
+ * patch or it has an error.
+ */
 
-    gWindow->fDisplayedWindow = gWindow->fScrollWindow;
+TextNode *
+paste_patch_nodes(PasteNode *paste)
+{
+    TextNode *new, *last;
 
-    repaste_item();
-
-    paste_page(begin_node);
-
-    /* so now I should just be able to disappear */
-    return gWindow->page;
+    if (paste->patch_nodes != NULL || paste->where != FromFile
+        || paste->arg_node == NULL)
+        return paste->patch_nodes;
+    if (setjmp(jmpbuf))
+        return NULL;
+    if (open_patch(paste->arg_node) == NULL)
+        return NULL;
+    init_parse_patch(gWindow->page);
+    new = parse_patch_nodes(paste->name, &last);
+    last->type = Endpatch;
+    last->next = NULL;
+    return paste->patch_nodes = new;
 }
 
 static void

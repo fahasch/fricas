@@ -1,5 +1,19 @@
 2026-11-05  Fabian Hassler  <fahasch@yahoo.de>
 
+	HyperDoc in the web browser: show/hide of examples in the page
+	* src/hyper/parse-paste.c (paste_patch_nodes, open_patch,
+	parse_patch_nodes): Parse a patch beside the page, split from
+	parse_patch
+	* src/hyper/hyper.h, src/hyper/mem.c: PasteNode keeps the parsed
+	patch
+	* src/hyper/html.c: Write a paste and its patch with a checkbox
+	switch; keyboard focus as a parameter
+	* src/hyper/webmain.c: Simplify form and link lookup
+	* src/hyper/www/hyperdoc.css, src/hyper/www/hyperdoc.js,
+	src/include/html.H1, src/include/parse_paste.H1: Adjust
+
+2026-11-05  Fabian Hassler  <fahasch@yahoo.de>
+
 	HyperDoc in the web browser: keep the place in the page
 	* src/hyper/webmain.c: After a click that keeps the page, and on
 	Up or Return, show the page at the clicked link or example;

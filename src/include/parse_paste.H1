@@ -1,3 +1,4 @@
 extern void parse_paste(void);
 extern void parse_pastebutton(void);
 extern HyperDocPage * parse_patch(PasteNode * paste);
+extern TextNode * paste_patch_nodes(PasteNode * paste);

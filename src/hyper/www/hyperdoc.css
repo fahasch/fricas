@@ -153,11 +153,24 @@ button.ht-button {
     overflow: hidden;
     opacity: 0;
 }
-/* places in a page (an example, a link): after a click that keeps the
-   page, or Up back to it, the page is shown there, with a few lines
-   above */
-.ht-anchor { display: inline-block; width: 0; }
-.ht-anchor, .ht-active { scroll-margin-top: 4em; }
+/*
+ * a paste written in both versions (write_toggle): the checkbox (its
+ * buttons are labels of it) chooses the one shown, as X11 replaces the
+ * paste by its patch
+ */
+.ht-toggle { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }
+.ht-paste-off, .ht-paste-on { display: contents; }
+.ht-toggle:checked + .ht-paste-off,
+.ht-toggle:not(:checked) + .ht-paste-off + .ht-paste-on { display: none; }
+label.ht-pastebutton { cursor: pointer; }
+.ht-toggle:focus-visible + .ht-paste-off label.ht-pastebutton,
+.ht-toggle:focus-visible + .ht-paste-off + .ht-paste-on label.ht-pastebutton {
+    outline: 1px dotted;
+}
+
+/* after a click that keeps the page, or Up back to it, the page is
+   shown at the link, with a few lines above */
+.ht-active { scroll-margin-top: 4em; }
 .ht-active { color: var(--ht-active); text-decoration: none; }
 .ht-active:hover { text-decoration: underline; }
 .ht-image { vertical-align: middle; }

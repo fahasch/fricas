@@ -150,7 +150,9 @@ static struct {
     Length block_first;         /* and the start of its first line */
     Length wrap_indent;         /* the indent at its last word */
     int style_start, style_end; /* its style attribute in out */
-    int pastes;                 /* paste buttons written (html_paste_number) */
+    int field_focus;            /* the first input field gets the keyboard */
+    int toggles;                /* show/hide switches written */
+    int toggle;                 /* inside the paste of switch toggle, or 0 */
     int seg_start;              /* where the text since the last tab starts */
     Length seg_x;               /* and its column */
     Length first;               /* start of the next line, relative to indent */
@@ -161,9 +163,24 @@ static struct {
 } w;
 
 static void write_nodes(TextNode *node, int ender);
+static void write_toggle(PasteNode *paste);
 
-/* the first input field gets the keyboard (webmain.c clears it) */
-int html_field_focus = 1;
+/*
+ * The paste that starts at node if its patch is read from a file (the
+ * patch is parsed then, paste_patch_nodes), else NULL.
+ */
+
+static PasteNode *
+file_paste(TextNode *node)
+{
+    PasteNode *paste = (PasteNode *) hash_find(gWindow->fPasteHashTable, node->data.text);
+
+    if (paste == NULL || paste->begin_node != node || paste->end_node == NULL
+        || paste_patch_nodes(paste) == NULL)
+        return NULL;
+    return paste;
+}
+
 
 static void
 add_length_vars(const char *name, Length l)
@@ -487,40 +504,6 @@ link_class(int type)
     }
 }
 
-/*
- * The number of a paste button on the current page, counted in the
- * order the writer writes them (anchor "paste<k>"), 0 if link is not
- * one.  Show/hide replaces one button by one (the paste's name changes,
- * e.g. ...Empty12 to ...Full12), so k stays.
- */
-
-static int
-count_pastes(TextNode *node, int ender, HyperLink *link, int *k)
-{
-    for (; node != NULL && node->type != ender; node = node->next)
-        if (node->type == Pastebutton) {
-            ++*k;
-            if (node->link == link)
-                return 1;
-        }
-    return 0;
-}
-
-int
-html_paste_number(HyperLink *link)
-{
-    HyperDocPage *page = gWindow->page;
-    int k = 0;
-
-    if (link == NULL || link->type != Pastebutton)
-        return 0;
-    if ((page->header && count_pastes(page->header->next, Endheader, link, &k))
-        || (page->scrolling && count_pastes(page->scrolling->next, Endscrolling, link, &k))
-        || (page->footer && count_pastes(page->footer->next, Endfooter, link, &k)))
-        return k;
-    return 0;
-}
-
 /* the start of an active area (show_link); inactive buttons are text */
 
 static void
@@ -547,9 +530,13 @@ start_link(TextNode *node)
     need_block();
     if (w.in_line && node->space)
         hb_add(w.out, " ");
-    /* after a click on show/hide the page is shown again at this place */
-    if (node->type == Pastebutton)
-        hb_printf(w.out, "<span class=\"ht-anchor\" id=\"paste%d\"></span>", w.pastes);
+    /* a show/hide button of a paste written in both versions: its switch */
+    if (node->type == Pastebutton && w.toggle != 0) {
+        snprintf(open, sizeof(open),
+                 "<label class=\"ht-active ht-pastebutton\" for=\"t%d\">", w.toggle);
+        push_inline(InlineLink, current_font(), open, "</label>");
+        return;
+    }
     new_window = node->type == Windowlink || node->type == Lispwindowlink;
     /*
      * on a page with input fields a link sends their values along; the
@@ -672,7 +659,7 @@ write_input(TextNode *node)
      * the field that has the keyboard at the start, as in X11; not when
      * the page is shown at a place (it would scroll to the field)
      */
-    const char *focus = item == gWindow->page->current_item && html_field_focus
+    const char *focus = item == gWindow->page->current_item && w.field_focus
         ? " autofocus" : "";
 
     need_block();
@@ -1019,12 +1006,19 @@ write_nodes(TextNode *node, int ender)
           case Unixlink:
           case Upbutton:
           case Windowlink:
-            start_link(node);
-            break;
           case Pastebutton:
-            w.pastes++;
             start_link(node);
             break;
+          case Paste: {
+            /* a paste with a patch from a file: both versions and a switch */
+            PasteNode *paste = w.toggle == 0 ? file_paste(node) : NULL;
+
+            if (paste != NULL) {
+                write_toggle(paste);
+                node = paste->end_node;
+            }
+            break;
+          }
           case Spadcommand:
           case Spadgraph:
           case Spadsrc:
@@ -1069,6 +1063,7 @@ write_nodes(TextNode *node, int ender)
           case Endtitle:
             return;
 
+          case Endpatch:
           case Endmath:
           case Endparameter:
           case Endinputbox:
@@ -1083,6 +1078,56 @@ write_nodes(TextNode *node, int ender)
             break;
         }
     }
+}
+
+/*
+ * A paste whose patch is read from a file (the examples of the .pht
+ * pages, "Interpret" on the HyperDoc pages): X11 replaces the paste by
+ * its patch when its button is clicked (paste_button).  Here both are
+ * written, after a checkbox: CSS shows the paste while it is off and
+ * the patch while it is on, and the buttons in both are labels of it.
+ * No request, no reload; the place in the page stays.
+ */
+
+static void
+write_toggle(PasteNode *paste)
+{
+    TextNode *end = paste->end_node;
+
+    new_line();
+    close_block();
+    w.toggle = ++w.toggles;
+    hb_printf(w.out, "<input type=\"checkbox\" class=\"ht-toggle\" id=\"t%d\">"
+              "<div class=\"ht-paste-off\">\n", w.toggle);
+    /* the paste ends at its own end node (pastes in it have others) */
+    end->type = Endpatch;
+    write_nodes(paste->begin_node->next, Endpatch);
+    end->type = Endpaste;
+    close_block();
+    hb_add(w.out, "</div><div class=\"ht-paste-on\">\n");
+    write_nodes(paste_patch_nodes(paste), Endpatch);
+    close_block();
+    hb_add(w.out, "</div>\n");
+    w.toggle = 0;
+}
+
+/*
+ * Parse the patches of the pastes of page before it is written: fields
+ * and boxes in them decide whether the page is a form.
+ */
+
+static void
+parse_page_patches(HyperDocPage *page)
+{
+    TextNode *node;
+    PasteNode *paste;
+
+    if (page->scrolling == NULL)
+        return;
+    for (node = page->scrolling->next; node != NULL && node->type != Endscrolling;
+         node = node->next)
+        if (node->type == Paste && (paste = file_paste(node)) != NULL)
+            node = paste->end_node;
 }
 
 /* write one region of the page (title, header, scroll, footer) */
@@ -1147,13 +1192,15 @@ write_title_button(Window id, const char *cls, const char *label, int active)
 /* the HTML document of the current page of gWindow */
 
 void
-html_write_page(HtmlBuf *out)
+html_write_page(HtmlBuf *out, int field_focus)
 {
     HyperDocPage *page = gWindow->page;
 
     w.out = out;
+    parse_page_patches(page);
     w.form = page->input_list != NULL || page->box_hash != NULL;
-    w.pastes = 0;
+    w.toggles = w.toggle = 0;
+    w.field_focus = field_focus;
     hb_add(out, "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>");
     hb_add_escaped(out, page->name);
     hb_add(out, "</title>\n"

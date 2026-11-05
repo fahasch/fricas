@@ -186,6 +186,7 @@ typedef struct paste_node {
    struct text_node *end_node;
    struct text_node *begin_node;
    struct input_window *paste_item;
+   struct text_node *patch_nodes;   /* the patch, parsed (paste_patch_nodes) */
 } PasteNode;
 
 /* Structure for formatted hypertext */
