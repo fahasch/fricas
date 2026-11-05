@@ -116,6 +116,7 @@ status_text(int status)
 {
     switch (status) {
       case 200: return "OK";
+      case 204: return "No Content";
       case 302: return "Found";
       case 303: return "See Other";
       case 400: return "Bad Request";
@@ -153,7 +154,7 @@ send_response(int fd, HttpResponse *r)
     char head[1024];
     int n;
 
-    if (r->status != 200 && r->body.len == 0) {
+    if (r->status != 200 && r->status != 204 && r->body.len == 0) {
         hb_add(&r->body, status_text(r->status));
         hb_add(&r->body, "\n");
         r->content_type = "text/plain; charset=utf-8";

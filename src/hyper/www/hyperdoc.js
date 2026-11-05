@@ -1,5 +1,12 @@
 /*
- * hyperdoc.js: optional; the pages work without it.  A link that opens
+ * hyperdoc.js: optional; the pages work without it.
+ *
+ * After a click that keeps the page (show/hide of an example, a command)
+ * the server answers with the page address plus the place ("#paste<k>",
+ * "#l<id>"), and the browser shows that place near the top.  The
+ * script keeps it where it was on the screen, as X11 does.
+ *
+ * A link that opens
  * a new HyperDoc window (\windowlink, ...; target or formtarget
  * "_blank") gets a window of the X11 size instead of a tab: the size
  * of the window it comes from, 40 pixels down and right (set_size_hints
@@ -50,4 +57,54 @@ document.addEventListener("submit", function (event) {
         button.formTarget = name;
         setTimeout(function () { button.formTarget = "_blank"; });
     }
+});
+
+const htPasteKey = "hyperdoc-place";
+
+document.addEventListener("click", function (event) {
+    const link = event.target.closest(".ht-active");
+    if (!link || !link.id)
+        return;
+    /* a show/hide button: the place is the anchor in front of it */
+    const before = link.previousElementSibling;
+    const place = link.classList.contains("ht-pastebutton") && before
+        && before.classList.contains("ht-anchor") ? before : link;
+    try {
+        sessionStorage.setItem(htPasteKey, JSON.stringify(
+            {id: place.id, top: place.getBoundingClientRect().top}));
+    } catch (e) {
+        /* without storage the browser's place is kept */
+    }
+});
+
+window.addEventListener("load", function () {
+    let saved = null;
+    try {
+        saved = JSON.parse(sessionStorage.getItem(htPasteKey));
+        sessionStorage.removeItem(htPasteKey);
+    } catch (e) {
+        return;
+    }
+    if (!saved || location.hash !== "#" + saved.id)
+        return;
+    const anchor = document.getElementById(saved.id);
+    const scroll = anchor && anchor.closest(".ht-scroll");
+    if (scroll)
+        scroll.scrollTop += anchor.getBoundingClientRect().top - saved.top;
+});
+
+/*
+ * Exit in a window that this script opened closes the window, as in
+ * X11 (the server ends the HyperDoc window; without the script the tab
+ * shows the main window's page instead).
+ */
+document.addEventListener("click", function (event) {
+    const quit = event.target.closest("a.ht-quit");
+    if (!quit || !htPlainClick(event) || !window.name.startsWith("hyperdoc")
+        || !window.opener)
+        return;
+    event.preventDefault();
+    fetch(quit.href, {redirect: "manual"}).finally(function () {
+        window.close();
+    });
 });

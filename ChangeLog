@@ -1,3 +1,17 @@
+2026-11-05  Fabian Hassler  <fahasch@yahoo.de>
+
+	HyperDoc in the web browser: keep the place in the page
+	* src/hyper/webmain.c: After a click that keeps the page, and on
+	Up or Return, show the page at the clicked link or example;
+	Return in a field answers 204; act on links and forms only for
+	the page sent to the browser (crash on a request for a page not
+	yet shown)
+	* src/hyper/html.c: Anchors for links and examples; keyboard in
+	the first field or the scroll region; Help in a new window
+	* src/hyper/httpd.c: Status 204
+	* src/hyper/www/hyperdoc.css, src/hyper/www/hyperdoc.js,
+	src/include/html.H1: Adjust
+
 2026-11-02  Fabian Hassler  <fahasch@yahoo.de>
 
 	HyperDoc in the web browser: forms, examples and search

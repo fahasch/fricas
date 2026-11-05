@@ -150,6 +150,7 @@ static struct {
     Length block_first;         /* and the start of its first line */
     Length wrap_indent;         /* the indent at its last word */
     int style_start, style_end; /* its style attribute in out */
+    int pastes;                 /* paste buttons written (html_paste_number) */
     int seg_start;              /* where the text since the last tab starts */
     Length seg_x;               /* and its column */
     Length first;               /* start of the next line, relative to indent */
@@ -160,6 +161,9 @@ static struct {
 } w;
 
 static void write_nodes(TextNode *node, int ender);
+
+/* the first input field gets the keyboard (webmain.c clears it) */
+int html_field_focus = 1;
 
 static void
 add_length_vars(const char *name, Length l)
@@ -483,6 +487,40 @@ link_class(int type)
     }
 }
 
+/*
+ * The number of a paste button on the current page, counted in the
+ * order the writer writes them (anchor "paste<k>"), 0 if link is not
+ * one.  Show/hide replaces one button by one (the paste's name changes,
+ * e.g. ...Empty12 to ...Full12), so k stays.
+ */
+
+static int
+count_pastes(TextNode *node, int ender, HyperLink *link, int *k)
+{
+    for (; node != NULL && node->type != ender; node = node->next)
+        if (node->type == Pastebutton) {
+            ++*k;
+            if (node->link == link)
+                return 1;
+        }
+    return 0;
+}
+
+int
+html_paste_number(HyperLink *link)
+{
+    HyperDocPage *page = gWindow->page;
+    int k = 0;
+
+    if (link == NULL || link->type != Pastebutton)
+        return 0;
+    if ((page->header && count_pastes(page->header->next, Endheader, link, &k))
+        || (page->scrolling && count_pastes(page->scrolling->next, Endscrolling, link, &k))
+        || (page->footer && count_pastes(page->footer->next, Endfooter, link, &k)))
+        return k;
+    return 0;
+}
+
 /* the start of an active area (show_link); inactive buttons are text */
 
 static void
@@ -509,21 +547,27 @@ start_link(TextNode *node)
     need_block();
     if (w.in_line && node->space)
         hb_add(w.out, " ");
+    /* after a click on show/hide the page is shown again at this place */
+    if (node->type == Pastebutton)
+        hb_printf(w.out, "<span class=\"ht-anchor\" id=\"paste%d\"></span>", w.pastes);
     new_window = node->type == Windowlink || node->type == Lispwindowlink;
     /*
      * on a page with input fields a link sends their values along; the
      * button names its link (HTML 2, unlike formaction known to every
      * browser)
      */
+    /* the id: a click that keeps the page shows it again at the link */
     if (w.form)
         snprintf(open, sizeof(open),
-                 "<button type=\"submit\" class=\"ht-active %s\" name=\"link\" value=\"%lu\"%s>",
+                 "<button type=\"submit\" class=\"ht-active %s\" id=\"l%lu\" name=\"link\" value=\"%lu\"%s>",
                  link_class(node->type), (unsigned long) node->link->win,
+                 (unsigned long) node->link->win,
                  new_window ? " formtarget=\"_blank\"" : "");
     else
         snprintf(open, sizeof(open),
-                 "<a class=\"ht-active %s\" href=\"link/%lu\"%s>",
+                 "<a class=\"ht-active %s\" id=\"l%lu\" href=\"link/%lu\"%s>",
                  link_class(node->type), (unsigned long) node->link->win,
+                 (unsigned long) node->link->win,
                  new_window ? " target=\"_blank\"" : "");
     push_inline(InlineLink, current_font(), open, w.form ? "</button>" : "</a>");
 }
@@ -624,14 +668,20 @@ static void
 write_input(TextNode *node)
 {
     InputItem *item = node->link->reference.string;
+    /*
+     * the field that has the keyboard at the start, as in X11; not when
+     * the page is shown at a place (it would scroll to the field)
+     */
+    const char *focus = item == gWindow->page->current_item && html_field_focus
+        ? " autofocus" : "";
 
     need_block();
     if (w.in_line && node->space)
         hb_add(w.out, " ");
     if (has_newline(item)) {
         /* a value with several lines (Shift-Return in X11) */
-        hb_printf(w.out, "<textarea class=\"ht-input\" rows=\"%d\" cols=\"%d\" name=\"s:",
-                  item->num_lines, item->size);
+        hb_printf(w.out, "<textarea class=\"ht-input\" rows=\"%d\" cols=\"%d\"%s name=\"s:",
+                  item->num_lines, item->size, focus);
         hb_add_escaped(w.out, item->name);
         hb_add(w.out, "\">");
         write_input_value(item);
@@ -639,7 +689,7 @@ write_input(TextNode *node)
     }
     else {
         hb_printf(w.out, "<input type=\"text\" class=\"ht-input\" size=\"%d\" "
-                  "style=\"--ht-size:%d\" name=\"s:", item->size, item->size + 1);
+                  "style=\"--ht-size:%d\"%s name=\"s:", item->size, item->size + 1, focus);
         hb_add_escaped(w.out, item->name);
         hb_add(w.out, "\" value=\"");
         write_input_value(item);
@@ -969,7 +1019,10 @@ write_nodes(TextNode *node, int ender)
           case Unixlink:
           case Upbutton:
           case Windowlink:
+            start_link(node);
+            break;
           case Pastebutton:
+            w.pastes++;
             start_link(node);
             break;
           case Spadcommand:
@@ -1041,7 +1094,14 @@ write_region(const char *cls, TextNode *node, int ender)
 
     if (node == NULL)
         return;
-    hb_printf(w.out, "<div class=\"%s\">\n", cls);
+    /*
+     * without an input field the keys (Page Up/Down, arrows) scroll the
+     * scroll region, as in X11: it has the keyboard at the start
+     */
+    if (strcmp(cls, "ht-scroll") == 0 && gWindow->page->current_item == NULL)
+        hb_printf(w.out, "<div class=\"%s\" tabindex=\"-1\" autofocus>\n", cls);
+    else
+        hb_printf(w.out, "<div class=\"%s\">\n", cls);
     start = w.out->len;
     while (w.items != NULL)
         end_items();
@@ -1066,13 +1126,18 @@ write_region(const char *cls, TextNode *node, int ender)
 static void
 write_title_button(Window id, const char *cls, const char *label, int active)
 {
+    /* Help opens a new window, as in X11 (helpForHyperDoc) */
+    int new_window = strcmp(cls, "ht-help") == 0;
+
     if (active && w.form)
         hb_printf(w.out, "<button type=\"submit\" class=\"ht-button %s\" "
-                  "name=\"link\" value=\"%lu\">%s</button>",
-                  cls, (unsigned long) id, label);
+                  "name=\"link\" value=\"%lu\"%s>%s</button>",
+                  cls, (unsigned long) id,
+                  new_window ? " formtarget=\"_blank\"" : "", label);
     else if (active)
-        hb_printf(w.out, "<a class=\"ht-button %s\" href=\"link/%lu\">%s</a>",
-                  cls, (unsigned long) id, label);
+        hb_printf(w.out, "<a class=\"ht-button %s\" href=\"link/%lu\"%s>%s</a>",
+                  cls, (unsigned long) id,
+                  new_window ? " target=\"_blank\"" : "", label);
     else
         hb_add(w.out, "<span class=\"ht-button ht-noop\"></span>");
     /* for browsers without CSS; the title bar is a flex box */
@@ -1088,6 +1153,7 @@ html_write_page(HtmlBuf *out)
 
     w.out = out;
     w.form = page->input_list != NULL || page->box_hash != NULL;
+    w.pastes = 0;
     hb_add(out, "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>");
     hb_add_escaped(out, page->name);
     hb_add(out, "</title>\n"

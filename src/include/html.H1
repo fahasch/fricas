@@ -4,5 +4,7 @@ extern void hb_printf(HtmlBuf * b, const char * fmt, ...);
 extern void hb_add_escaped(HtmlBuf * b, const char * s);
 extern void hb_free(HtmlBuf * b);
 extern void html_write_page(HtmlBuf * out);
+extern int html_paste_number(HyperLink * link);
+extern int html_field_focus;
 extern int html_image_number(const char * name);
 extern void html_image_response(const char * name, HttpResponse * r);

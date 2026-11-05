@@ -281,24 +281,44 @@ store_form(FormField *form, int nform)
 static struct {
     Window win;
     int v;
+    HyperDocPage *page;
 } shown[MaxWindows];
 static int last_v = 0;
 
-/* the number of the page shown last in window win */
+/* the slot of window win: the number and the page shown last */
 
-static int *
-shown_number(Window win)
+static int
+shown_slot(Window win)
 {
     int i;
 
     for (i = 0; i < MaxWindows && shown[i].win != 0; i++)
         if (shown[i].win == win)
-            return &shown[i].v;
+            return i;
     if (i == MaxWindows)
         i = (int) (win % MaxWindows);   /* reuse a slot; old windows */
     shown[i].win = win;
     shown[i].v = 0;
-    return &shown[i].v;
+    shown[i].page = NULL;
+    return i;
+}
+
+static int *
+shown_number(Window win)
+{
+    return &shown[shown_slot(win)].v;
+}
+
+/*
+ * Has the current page of gWindow been sent to the browser?  Only then
+ * is it parsed (display_page) and has the fields and links that a
+ * request names.
+ */
+
+static int
+page_was_shown(void)
+{
+    return shown[shown_slot(gWindow->fMainWindow)].page == gWindow->page;
 }
 
 /* the address of the current page of gWindow, with a new number */
@@ -321,6 +341,98 @@ page_location(const char *prefix)
     }
     location[n] = '\0';
     return location;
+}
+
+/*
+ * X11 keeps the scroll position of a page while it is on the page
+ * stack, and a click that keeps the page does not move it.  Here the
+ * browser loads the page again; the address then names a place on it:
+ * the clicked link ("#l<id>", the id of the link element), the clicked
+ * show/hide button ("#paste<k>", html_paste_number, since show/hide
+ * parses the page part again), or, when Up, Return or the browser's
+ * Back button leads back to a page, the link last clicked on it.
+ */
+
+#define MaxClicks 256
+
+static Window anchored_window = 0;  /* the next page of it is shown at a place */
+
+static struct {
+    HyperDocPage *page;
+    Window link;
+} clicks[MaxClicks];
+static int next_click = 0;
+
+static void
+remember_click(HyperDocPage *page, Window link)
+{
+    int i;
+
+    for (i = 0; i < MaxClicks; i++)
+        if (clicks[i].page == page) {
+            clicks[i].link = link;
+            return;
+        }
+    clicks[next_click].page = page;
+    clicks[next_click].link = link;
+    next_click = (next_click + 1) % MaxClicks;
+}
+
+/* the link last clicked on page, if it is still one of its links */
+
+static Window
+last_click(HyperDocPage *page)
+{
+    int i;
+
+    for (i = 0; i < MaxClicks; i++)
+        if (clicks[i].page == page && page->fLinkHashTable != NULL
+            && hash_find(page->fLinkHashTable, (char *) &clicks[i].link) != NULL)
+            return clicks[i].link;
+    return 0;
+}
+
+/* the address of the current page of gWindow, at the place of link */
+
+static char *
+page_location_at(const char *prefix, Window link)
+{
+    char *location = page_location(prefix);
+
+    if (link != 0 && strlen(location) + 24 < 600)
+        sprintf(location + strlen(location), "#l%lu", (unsigned long) link);
+    return location;
+}
+
+/* follow a clicked link; the answer names the page then shown */
+
+static void
+follow_link_request(HyperLink *link, const char *prefix, HttpResponse *r)
+{
+    HDWindow *window = gWindow;
+    HyperDocPage *page = gWindow->page;
+    Window id = link->win;
+    int k = html_paste_number(link);
+    int type = link->type;
+    char *location;
+
+    remember_click(page, id);
+    follow_link(link, 1);
+    if (gWindow == NULL)
+        gWindow = gParentWindow;
+    if (k > 0) {
+        location = page_location(prefix);
+        sprintf(location + strlen(location), "#paste%d", k);
+    }
+    else if (gWindow == window && gWindow->page == page)
+        location = page_location_at(prefix, id);
+    else if (gWindow == window && (type == Upbutton || type == Returnbutton))
+        location = page_location_at(prefix, last_click(gWindow->page));
+    else
+        location = page_location(prefix);
+    /* the page is shown at a place: no field takes the keyboard (html.c) */
+    anchored_window = strchr(location, '#') != NULL ? gWindow->fMainWindow : 0;
+    r->location = location;
 }
 
 static char *
@@ -393,6 +505,12 @@ html_window_request(char *path, FormField *query, int nquery,
     gWindow = htw;
     rest++;
     r->status = 303;
+    if ((form != NULL || *rest != '\0') && strncmp(rest, "goto/", 5) != 0
+        && !page_was_shown()) {
+        /* a form or link of a page the browser has not got: show it */
+        r->location = page_location(*rest == '\0' ? "../" : "../../");
+        return;
+    }
     if (form != NULL) {
         store_form(form, nform);
         if (*rest == '\0') {
@@ -401,10 +519,19 @@ html_window_request(char *path, FormField *query, int nquery,
             if (number != NULL) {
                 id = strtoul(number, &rest, 10);
                 link = (HyperLink *) hash_find(gWindow->page->fLinkHashTable, (char *) &id);
-                if (link != NULL && *rest == '\0')
-                    follow_link(link, 1);
-                if (gWindow == NULL)
-                    gWindow = gParentWindow;
+                if (link != NULL && *rest == '\0') {
+                    follow_link_request(link, "../", r);
+                    return;
+                }
+            }
+            /*
+             * Return in a field: the values are stored; the browser
+             * stays where it is, with the cursor in the field, as X11
+             */
+            name = field_value(form, nform, "page");
+            if (number == NULL && name != NULL && strcmp(name, gWindow->page->name) == 0) {
+                r->status = 204;
+                return;
             }
             r->location = page_location("../");
             return;
@@ -425,9 +552,13 @@ html_window_request(char *path, FormField *query, int nquery,
         }
         *shown_number(id) = number != NULL ? atoi(number) : ++last_v;
         display_page(gWindow->page);
+        shown[shown_slot(id)].page = gWindow->page;
         r->status = 200;
         r->content_type = "text/html; charset=utf-8";
+        html_field_focus = anchored_window != id;
+        anchored_window = 0;
         html_write_page(&r->body);
+        html_field_focus = 1;
         return;
     }
     if (strncmp(rest, "goto/", 5) == 0)
@@ -436,8 +567,10 @@ html_window_request(char *path, FormField *query, int nquery,
     else if (strncmp(rest, "link/", 5) == 0) {
         id = strtoul(rest + 5, &rest, 10);
         link = (HyperLink *) hash_find(gWindow->page->fLinkHashTable, (char *) &id);
-        if (link != NULL && *rest == '\0')
-            follow_link(link, 1);
+        if (link != NULL && *rest == '\0') {
+            follow_link_request(link, "../../", r);
+            return;
+        }
     }
     else {
         r->status = 404;
