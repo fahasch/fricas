@@ -174,6 +174,7 @@ label.ht-pastebutton { cursor: pointer; }
 .ht-active { color: var(--ht-active); text-decoration: none; }
 .ht-active:hover { text-decoration: underline; }
 .ht-image { vertical-align: middle; }
+.ht-noplot { font-style: italic; }
 
 /* input fields: the width of \inputstring, as input_string_width */
 .ht-input {

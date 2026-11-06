@@ -1,3 +1,10 @@
+2026-11-06  Fabian Hassler  <fahasch@yahoo.de>
+
+	HyperDoc in the web browser: placeholder for missing plots
+	* src/hyper/html.c (write_image): A plot picture whose viewport
+	file is missing is shown as "[plot: not available yet]"
+	* src/hyper/www/hyperdoc.css: Adjust
+
 2026-11-05  Fabian Hassler  <fahasch@yahoo.de>
 
 	HyperDoc in the web browser: show/hide of examples in the page

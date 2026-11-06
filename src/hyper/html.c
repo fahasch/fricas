@@ -562,11 +562,22 @@ start_link(TextNode *node)
 static void
 write_image(TextNode *node)
 {
-    int n = html_image_number(node->data.text);
+    const char *file = node->data.text + (*node->data.text == ' ');
+    int n;
 
     need_block();
     if (w.in_line && node->space)
         hb_add(w.out, " ");
+    /*
+     * the picture of a plot (\viewport, \graphpaste) is made by the X11
+     * viewers; without them it is missing until the graphics are ported
+     */
+    if (strstr(file, ".VIEW/image") != NULL && access(file, R_OK) != 0) {
+        hb_add(w.out, "<span class=\"ht-noplot\">[plot: not available yet]</span>");
+        w.in_line = 1;
+        return;
+    }
+    n = html_image_number(file);
     if (n >= 0)
         hb_printf(w.out, "<img class=\"ht-image\" src=\"../img/%d.png\" alt=\"\">", n);
     w.in_line = 1;
