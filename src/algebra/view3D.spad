@@ -516,7 +516,7 @@ ThreeDimensionalViewport() : Exports == Implementation where
 
     makeViewport3D0 viewport ==
       doOptions viewport --local function to extract and assign optional arguments for 3D viewports
-      say("   Transmitting data...")$DisplayPackage
+      if _$SpadServer$Lisp then say("   Transmitting data...")$DisplayPackage
       transform := coord(viewport.optionsField, cartesian$COORDSYS)$DrawOptionFunctions0
       check(viewport.space3D)
       lpts := lp(viewport.space3D)

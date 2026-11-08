@@ -1,5 +1,10 @@
 2026-11-08  Fabian Hassler  <fahasch@yahoo.de>
 
+	* src/algebra/view2D.spad, src/algebra/view3D.spad: Say that data
+	goes to the viewport manager only when there is one
+
+2026-11-08  Fabian Hassler  <fahasch@yahoo.de>
+
 	* src/algebra/jfricas.spad: startPipe, a connection to the kernel
 	over standard input and output instead of Hunchentoot
 
