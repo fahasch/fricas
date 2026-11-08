@@ -1,5 +1,10 @@
 2026-11-08  Fabian Hassler  <fahasch@yahoo.de>
 
+	* src/algebra/jfricas.spad: startPipe, a connection to the kernel
+	over standard input and output instead of Hunchentoot
+
+2026-11-08  Fabian Hassler  <fahasch@yahoo.de>
+
 	* src/algebra/viewexp.spad: New package ViewportExport, SVG
 	pictures of two-dimensional viewports
 	* src/algebra/view2D.spad: Export pointColors, lineColors and

@@ -104,6 +104,12 @@ JFriCAS: Exports == Implementation where
       ++ start(p) initializes jFriCAS and starts a new webserver
       ++ instance on port p. It returns true if successful and false
       ++ if the hunchentoot webserver is not available.
+    startPipe : () -> Void
+      ++ startPipe() initializes jFriCAS and answers requests on
+      ++ standard input instead of a webserver: a line with the length
+      ++ of the code, then the code. The answer is a line with the
+      ++ character with code 1, "JFRICAS " and the length of the
+      ++ result of handleOutput, then that result.
 
     jfricasIOHandler : (Symbol, SEX) -> Void
       ++ jfricasIOHandler(s) reacts on certain ioHooks and writes out
@@ -443,7 +449,9 @@ JFriCAS: Exports == Implementation where
         "  (format nil _"~A~%_" " handler "))"]
 
 
-    initialize() : Void ==
+    -- What both transports need: the output streams, jfricas-eval
+    -- and the ioHook.
+    initializeCommon() : Void ==
         setTranslateType!(addLinks
             extendConstructorURLs(table(), "https://fricas.github.io/api/"))
 
@@ -492,6 +500,11 @@ JFriCAS: Exports == Implementation where
           "(defun fricas-eval (code)",_
           "  (format nil _"~{~A~%~}_" (|parseAndEvalToString| code)))"]
 
+        setIOHook(jfricasIOHandler)
+
+    initialize() : Void ==
+        initializeCommon()
+
         -- Make the url
         -- http://localhost:PORT/jfricas?code=D(sin(x),x) available.
         defineHandler("jfricas", "(jfricas-eval code)")
@@ -500,7 +513,24 @@ JFriCAS: Exports == Implementation where
         -- http://localhost:PORT/fricas?code=D(sin(x),x) available.
         defineHandler("fricas", "(fricas-eval code)")
 
-        setIOHook(jfricasIOHandler)
+    -- An interrupt (SIGINT) while waiting for a request throws to
+    -- top_level; then we wait again.
+    startPipe() : Void ==
+        initializeCommon()
+        evalLisp concat [_
+          "(loop",_
+          "  (let ((code (catch '|top_level|",_
+          "                (let ((line (read-line *standard-input* nil)))",_
+          "                  (unless line (return))",_
+          "                  (let ((s (make-string (parse-integer line))))",_
+          "                    (read-sequence s *standard-input*)",_
+          "                    s)))))",_
+          "    (when (stringp code)",_
+          "      (let ((res (jfricas-eval code)))",_
+          "        (format t _"~AJFRICAS ~D~%~A_" (code-char 1)",_
+          "                (length res) res)",_
+          "        (finish-output)))))"]
+        void()
 
 
     -- Start the hunchentoot webserver on port p.
@@ -538,6 +568,7 @@ JFriCAS: Exports == Implementation where
         w "import requests"
         w "import json"
         w "import os"
+        w "import sys"
 
         w "____version____ = '3.0.0'"
 
@@ -570,6 +601,42 @@ JFriCAS: Exports == Implementation where
         w "    def fricas(self, code):"
         w "        return(requests.post(self.url, data={'code': code}))"
 
+        -- The connection to FriCAS when it is not httpFriCAS.
+        w "server = None"
+
+        w "class pipeResponse():"
+        w "    def ____init____(self, text):"
+        w "        self.ok = text is not None"
+        w "        self.text = text"
+        w "    def json(self):"
+        w "        return json.loads(self.text)"
+
+        -- pipeFriCAS is the connection to FriCAS via a pipe, see
+        -- startPipe. Lines before an answer go to the log. Jupyter
+        -- sends an interrupt to the process group, so FriCAS gets it too
+        -- and answers with an error.
+        w "class pipeFriCAS():"
+        w "    def ____init____(self, proc):"
+        w "        self.proc = proc"
+        w "    def answer(self):"
+        w "        p = self.proc"
+        w "        line = p.stdout.readline()"
+        w "        while line and not line.startswith('\x01JFRICAS '):"
+        w "            sys.stderr.write(line)"
+        w "            line = p.stdout.readline()"
+        w "        if not line: return pipeResponse(None)"
+        w "        return pipeResponse(p.stdout.read(int(line.split()[1])))"
+        w "    def fricas(self, code):"
+        w "        p = self.proc"
+        w "        try:"
+        w "            p.stdin.write(str(len(code)) + '\n' + code)"
+        w "            p.stdin.flush()"
+        w "            return self.answer()"
+        w "        except KeyboardInterrupt:"
+        w "            return self.answer()"
+        w "        except OSError:"
+        w "            return pipeResponse(None)"
+
         w "class FriCAS(Kernel):"
         w "    implementation = 'spad'"
         w "    implementation__version = ____version____"
@@ -581,7 +648,7 @@ JFriCAS: Exports == Implementation where
 
         w "    def ____init____(self, **kwargs):"
         w "        Kernel.____init____(self, **kwargs)"
-        w "        self.server = httpFriCAS()"
+        w "        self.server = server or httpFriCAS()"
         w "        self.fricas__operations = fricas__operations"
         w "        self.fricas__constructors = fricas__constructors"
         w "        self.fricas__ids = sorted(fricas__operations + fricas__constructors)"
@@ -777,7 +844,12 @@ JFriCAS: Exports == Implementation where
         w "    # Uncomment or edit as you like."
 
         w "    # Default:"
-        w "    pid = Popen(['fricas','-eval',start])"
+        w "    if os.environ.get('JFRICAS__TRANSPORT') == 'pipe':"
+        w "        pid = Popen(['fricas', '-nosman', '-eval', 'startPipe()$JFriCAS'],"
+        w "                    stdin=PIPE, stdout=PIPE, text=True, encoding='utf-8')"
+        w "        server = pipeFriCAS(pid)"
+        w "    else:"
+        w "        pid = Popen(['fricas','-eval',start])"
         w ""
         w "    # Start the FriCAS process in a separate terminal."
         w "    # That might be good for controlling FriCAS directly in case"
