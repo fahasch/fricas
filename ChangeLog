@@ -1,3 +1,13 @@
+2026-11-08  Fabian Hassler  <fahasch@yahoo.de>
+
+	* src/algebra/viewexp.spad: New package ViewportExport, SVG
+	pictures of two-dimensional viewports
+	* src/algebra/view2D.spad: Export pointColors, lineColors and
+	pointSizes of GraphImage
+	* src/algebra/jfricas.spad: Show SVG output as image/svg+xml
+	* src/algebra/Makefile.in, src/algebra/exposed.lsp: Add and
+	expose ViewportExport
+
 2026-11-05  Fabian Hassler  <fahasch@yahoo.de>
 
 	* src/interp/define.boot: Keep the representation correct for a

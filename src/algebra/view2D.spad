@@ -84,6 +84,15 @@ GraphImage () : Exports == Implementation where
       ++ axes of the given graph, \spad{gi} of the domain
       ++ \spadtype{GraphImage}, to be that of the list of unit increments,
       ++ \spad{lu}, and returns the new list of units for \spad{gi}.
+    pointColors : % -> LPAL
+      ++ pointColors(gi) returns the palette colors of the points, one
+      ++ for each list of points of the graph \spad{gi}.
+    lineColors : % -> LPAL
+      ++ lineColors(gi) returns the palette colors of the lines, one
+      ++ for each list of points of the graph \spad{gi}.
+    pointSizes : % -> LPI
+      ++ pointSizes(gi) returns the sizes of the points, one for each
+      ++ list of points of the graph \spad{gi}.
     component : (%, L(P), PAL, PAL, PI) -> Void
       ++ component(gi, lp, pal1, pal2, p) sets the components of the
       ++ graph, \spad{gi} of the domain \spadtype{GraphImage}, to the
@@ -329,6 +338,9 @@ GraphImage () : Exports == Implementation where
     -- Exported Functions
     key graf                  == graf.key
     pointLists graf           == graf.llPoints
+    pointColors graf          == graf.pointColors
+    lineColors graf           == graf.lineColors
+    pointSizes graf           == graf.pointSizes
     ranges graf                ==
       empty?(graf.rangesField) => []
       [segment(convert(low(graf.rangesField.1))@F,

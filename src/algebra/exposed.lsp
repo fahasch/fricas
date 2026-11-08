@@ -349,6 +349,7 @@
   (|Vector| . VECTOR)
   (|VectorFunctions2| . VECTOR2)
   (|ViewDefaultsPackage| . VIEWDEF)
+  (|ViewportExport| . VIEWEXP)
   (|Void| . VOID)
   (|WuWenTsunTriangularSet| . WUTSET)
   (|ZeroDimensionalSolvePackage| . ZDSOLVE)

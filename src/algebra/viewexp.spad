@@ -1,0 +1,278 @@
+)abbrev package VIEWEXP ViewportExport
+++ Author: Fabian Hassler
+++ Date Created: 8 November 2026
+++ Keywords: graphics, SVG, viewport
+++ Description:
+++ This package turns two-dimensional viewports and graphs into SVG
+++ pictures, without the viewport manager, for example to show plots
+++ in a Jupyter notebook (jFriCAS).  The picture shows what the X11
+++ viewer shows: the graphs with their point and line colours, the
+++ axes, the units and the title.
+ViewportExport : Exports == Implementation where
+  DF ==> DoubleFloat
+  I ==> Integer
+  NNI ==> NonNegativeInteger
+  P ==> Point(DF)
+  PT ==> SCartesian(2)
+  SC ==> Scene(PT)
+  PAL ==> Palette
+  G ==> GraphImage
+  V2 ==> TwoDimensionalViewport
+  GS ==> Record(scaleX : DF, scaleY : DF, deltaX : DF, deltaY : DF, _
+                points : I, connect : I, spline : I, _
+                axes : I, axesColor : PAL, units : I, unitsColor : PAL, _
+                showing : I)
+  SHAPE ==> Record(shptype : Symbol, centre : PT, size : PT, fill : Boolean)
+  MATERIAL ==> Record(lineWidth : DF, lineCol : String, fillCol : String, _
+                      matOpacity : DF)
+  -- data ranges and viewer state of one graph, see toBox
+  FRAME ==> Record(xmin : DF, dx : DF, ymin : DF, dy : DF, st : GS)
+
+  Exports ==> with
+    svg : V2 -> Void
+      ++ svg(v) shows the two-dimensional viewport \spad{v} as an SVG
+      ++ picture: in a Jupyter notebook (jFriCAS) as a picture, elsewhere
+      ++ as SVG text.
+      ++ Example: \spad{svg(draw(sin(x), x = -5..5))}.
+    toSvg : V2 -> String
+      ++ toSvg(v) returns an SVG picture of the two-dimensional viewport
+      ++ \spad{v}: the graphs it shows, with axes, units and title.
+    toSvg : G -> String
+      ++ toSvg(g) returns an SVG picture of the graph \spad{g}, shown as
+      ++ the only graph of a viewport with default settings.
+
+  Implementation ==> add
+    import from DF
+    import from SC
+    import from ViewDefaultsPackage
+    import from DrawOptionFunctions0
+
+    -- The picture is drawn into a box of wd x ht units with y upwards.
+    -- Scene writes it with a width of 1000 and a size of 12cm x 8cm,
+    -- so wd/ht is 3/2 and one unit is about 0.76 pixels.
+    wd ==> 600::DF
+    ht ==> 400::DF
+    titleBand ==> 30::DF
+    labelSize ==> 29::NNI
+    titleSize ==> 37::NNI
+
+    nan?(x : DF) : Boolean == x ~= x
+
+    -- Colours as in the X11 colour table (makeColors in
+    -- src/lib/spadcolors.c): the hue angle of each of the 27 hues, and
+    -- saturation and value of the shades dark, dim, bright, pastel, light.
+    hueAngle(h : I) : DF ==
+        h < 10 => (6*h)::DF
+        h < 16 => (60 + 20*(h - 10))::DF
+        (180 + 12*(h - 16))::DF
+
+    saturations : List DF := [0.90, 0.80, 0.74, 0.50, 0.18]
+    values : List DF := [0.38, 0.58, 0.75, 0.88, 0.94]
+
+    hsvToRgb(h : DF, s : DF, v : DF) : List DF ==
+        i := wholePart(h/60.0)
+        f := h/60.0 - i::DF
+        p := v*(1.0 - s)
+        q := v*(1.0 - s*f)
+        t := v*(1.0 - s*(1.0 - f))
+        i = 0 => [v, t, p]
+        i = 1 => [q, v, p]
+        i = 2 => [p, v, t]
+        i = 3 => [p, q, v]
+        i = 4 => [t, p, v]
+        [v, p, q]
+
+    -- The X11 viewer takes the hue index minus one for lines, but the
+    -- hue index itself for points, and merges some shades for lines;
+    -- here both use the entry that the palette names (red() is hue 1,
+    -- the first entry; dark is shade 1).
+    cssColor(pal : PAL) : String ==
+        h := hue(hue(pal))$Color - 1
+        s := max(1, min(5, shade(pal)))
+        rgb := hsvToRgb(hueAngle(h), saturations.s, values.s)
+        concat ["rgb(", join(",", [string(wholePart(255.0*c + 0.5))
+                                     for c in rgb]), ")"]
+
+    material(n : SC, w : DF, pal : PAL) : SC ==
+        col := cssColor(pal)
+        addSceneMaterial(n, w, col, col)
+
+    -- Label of the tick n*u, with three significant digits of u.
+    tickLabel(n : I, u : DF) : String ==
+        d := max(0, 2 - wholePart(floor(log10(abs(u)))))
+        s := toString(n::DF*u, min(d, 10)::NNI)
+        if position(char ".", s, 1) > 0 then
+            s := rightTrim(rightTrim(s, char "0"), char ".")
+        s = "-0" => "0"
+        s
+
+    -- Position in the box of the data point (x, y) of a graph: as in the
+    -- X11 viewer, the data ranges are mapped to [-1/2, 1/2], moved by
+    -- deltaX, deltaY and scaled by scaleX, scaleY.
+    toBox(f : FRAME, x : DF, y : DF, h : DF) : PT ==
+        u := ((x - f.xmin)/f.dx - 0.5 - f.st.deltaX)*f.st.scaleX + 0.5
+        v := ((y - f.ymin)/f.dy - 0.5 - f.st.deltaY)*f.st.scaleY + 0.5
+        spnt(wd*u, h*v)
+
+    -- The lists of points ll, split at points that are not numbers.
+    branches(ll : List List P) : List List P ==
+        res : List List P := []
+        for l in ll repeat
+            cur : List P := []
+            for p in l repeat
+                if nan?(p.1) or nan?(p.2) then
+                    if not empty? cur then res := cons(reverse! cur, res)
+                    cur := []
+                else
+                    cur := cons(p, cur)
+            if not empty? cur then res := cons(reverse! cur, res)
+        reverse! res
+
+    -- Data ranges of g; from its points if g has no ranges.
+    frame(g : G, gs : GS) : FRAME ==
+        r := ranges(g)
+        xmin, xmax, ymin, ymax : DF
+        if #r >= 2 then
+            xmin := convert(low(r.1))@DF
+            xmax := convert(high(r.1))@DF
+            ymin := convert(low(r.2))@DF
+            ymax := convert(high(r.2))@DF
+        else
+            pts := concat(branches(pointLists(g)))
+            empty? pts => [-1, 2::DF, -1, 2::DF, gs]
+            xs := [p.1 for p in pts]
+            ys := [p.2 for p in pts]
+            xmin := min(xs)
+            xmax := max(xs)
+            ymin := min(ys)
+            ymax := max(ys)
+        dx := xmax - xmin
+        dy := ymax - ymin
+        if not (dx > 0.0) then dx := 1::DF
+        if not (dy > 0.0) then dy := 1::DF
+        [xmin, dx, ymin, dy, gs]
+
+    -- Unit of the ticks of the coordinate i of g; a power of ten if g
+    -- has no units.
+    unit(g : G, f : FRAME, i : I) : DF ==
+        u := units(g)
+        if #u >= i then
+            ui := convert(u.i)@DF
+            ui > 0.0 => return ui
+        d := if i = 1 then f.dx else f.dy
+        10::DF^wholePart(floor(log10(d)))
+
+    inBox?(c : PT, h : DF) : Boolean ==
+        x := screenCoordX(c)
+        y := screenCoordY(c)
+        x >= 0.0 and x <= wd and y >= 0.0 and y <= h
+
+    drawGraph(n : SC, g : G, f : FRAME, h : DF) : Void ==
+        pcs := pointColors(g)
+        lcs := lineColors(g)
+        pss := pointSizes(g)
+        for l in pointLists(g) for k in 1.. repeat
+            lc := if k <= #lcs then lcs.k else lineColorDefault()
+            pc := if k <= #pcs then pcs.k else pointColorDefault()
+            ps := if k <= #pss then pss.k else pointSizeDefault()
+            bs := branches([l])
+            if f.st.connect ~= 0 then
+                m := material(n, 2.5, lc)
+                for b in bs repeat
+                    addSceneLine(m, [toBox(f, p.1, p.2, h) for p in b])
+            if f.st.points ~= 0 then
+                m := material(n, 1.0, pc)
+                r := (ps::DF)*0.66
+                for b in bs repeat
+                    for p in b repeat
+                        c := toBox(f, p.1, p.2, h)
+                        if inBox?(c, h) then
+                            dot : SHAPE := ["ellipse"::Symbol, c,
+                                            spnt(r, r), true]
+                            addSceneShape(m, dot)
+
+    drawAxes(n : SC, f : FRAME, h : DF) : Void ==
+        o := toBox(f, 0.0, 0.0, h)
+        m := material(n, 1.5, f.st.axesColor)
+        x := screenCoordX(o)
+        y := screenCoordY(o)
+        if y >= 0.0 and y <= h then addSceneLine(m, [spnt(0.0, y), spnt(wd, y)])
+        if x >= 0.0 and x <= wd then addSceneLine(m, [spnt(x, 0.0), spnt(x, h)])
+
+    -- Ticks and labels on the lower and the left edge, at multiples
+    -- of the units, at least 5 characters (x) or 2 lines (y) apart, as
+    -- in the X11 viewer.  The labels of y leave a gap after their tick
+    -- (else 1 reads as -1) and are left out in the band of the labels
+    -- of x.
+    drawUnits(n : SC, g : G, f : FRAME, h : DF) : Void ==
+        m := material(n, 1.5, f.st.unitsColor)
+        o := toBox(f, 0.0, 0.0, h)
+        ux := unit(g, f, 1)
+        uy := unit(g, f, 2)
+        tx := screenCoordX(toBox(f, ux, 0.0, h)) - screenCoordX(o)
+        ty := screenCoordY(toBox(f, 0.0, uy, h)) - screenCoordY(o)
+        tx = 0.0 or ty = 0.0 => void()
+        charWidth : DF := 8.7
+        kx := wholePart(5.0*charWidth/abs(tx)) + 1
+        ky := wholePart(4.0*charWidth/abs(ty)) + 1
+        nx := wholePart(screenCoordX(o)/abs(tx)/kx::DF) + 1
+        for i in -nx..nx+wholePart(wd/abs(tx)/kx::DF) repeat
+            x := screenCoordX(o) + (i*kx)::DF*tx
+            if x >= 0.0 and x <= wd then
+                addSceneLine(m, [spnt(x, 0.0), spnt(x, 6.0)])
+                s := tickLabel(i*kx, ux)
+                addSceneText(m, s, labelSize,
+                             spnt(x - 4.4*(#s)::DF, 10.0))
+        ny := wholePart(screenCoordY(o)/abs(ty)/ky::DF) + 1
+        for i in -ny..ny+wholePart(h/abs(ty)/ky::DF) repeat
+            y := screenCoordY(o) + (i*ky)::DF*ty
+            if y >= 0.0 and y <= h then
+                addSceneLine(m, [spnt(0.0, y), spnt(6.0, y)])
+                if y >= 30.0 then
+                    addSceneText(m, tickLabel(i*ky, uy), labelSize,
+                                 spnt(16.0, y - 5.0))
+
+    picture(ttl : String, lg : List Record(g : G, state : GS)) : String ==
+        h := if empty? ttl then ht else ht - titleBand
+        root := createSceneRoot(0, 0, 600, 400)
+        if not empty? ttl then
+            m := addSceneMaterial(root, 1.0, "black", "black")
+            addSceneText(m, ttl, titleSize,
+                         spnt(wd/2.0 - 5.5*(#ttl)::DF, h + 8.0))
+        clip := addSceneClip(root, boxBoundary(spnt(0.0, 0.0), spnt(wd, h)))
+        -- all graphs are drawn in the data coordinates of the first one
+        gr0 := first(lg)
+        f0 := frame(gr0.g, gr0.state)
+        for gr in lg repeat
+            f : FRAME := [f0.xmin, f0.dx, f0.ymin, f0.dy, gr.state]
+            if f.st.axes ~= 0 then drawAxes(clip, f, h)
+            drawGraph(clip, gr.g, f, h)
+            if f.st.units ~= 0 then drawUnits(clip, gr.g, f, h)
+        mat : MATERIAL := [1::DF, "black", "black", 1::DF]
+        e := toSVG(root, mat, identity()$STransform(PT),
+                   nullBoundary()$SBoundary(PT), 1.0, false, false,
+                   namedBranch([], [])$SceneNamedPoints(PT))
+        join(new(1, newline()$Character)$String, e::List(String))
+
+    toSvg(v : V2) : String ==
+        gs := graphs(v)
+        sts := graphStates(v)
+        shown : List Record(g : G, state : GS) :=
+            [[(gs.i)::G, sts.i] for i in 1..#gs
+               | gs.i case G and sts.i.showing ~= 0]
+        empty? shown => error "toSvg: the viewport shows no graph"
+        picture(title(options(v), ""), shown)
+
+    toSvg(g : G) : String ==
+        -- the defaults of a new viewport: points, lines and axes, no units
+        st : GS := [0.9, 0.9, 0::DF, 0::DF, 1, 1, 0, 1, axesColorDefault(),
+                    0, unitsColorDefault(), 1]
+        picture("", [[g, st]])
+
+    -- Between the ioHook events startSvgOutput and endOfSvgOutput, from
+    -- which jFriCAS makes an output of type image/svg+xml.
+    svg(v : V2) : Void ==
+        s := toSvg(v)
+        ioHook("startSvgOutput"::Symbol)$Lisp
+        WRITE_-LINE(s)$Lisp
+        ioHook("endOfSvgOutput"::Symbol)$Lisp

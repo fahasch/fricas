@@ -84,7 +84,7 @@ SPAD_SRCS= \
      symbol syssolp system tableau table \
      taylor tensor tex texd texmacs timeout transsolve tree trigcat \
      triset tube twofact u32vec unittest updecomp \
-     utsode variable vector view2D view3D viewDef \
+     utsode variable vector view2D view3D viewDef viewexp \
      vecrec viewpack vsbasis weier wtpol \
      xdpolyf xhash xlpoly xpfact xpoly \
      ystream zerodim
@@ -306,7 +306,7 @@ SPADLIST8=\
      URAGG UTS2 UTSCAT UTSODE UTSODETL UTS VARCAT \
      VARIABLE VECTCAT VECTOR2 VECREC1 VECREC2 VECTOR \
      VHPSOLV \
-     VIEW2D VIEW3D VIEWDEF VIEW VOID VSBASIS WEIER \
+     VIEW2D VIEW3D VIEWDEF VIEWEXP VIEW VOID VSBASIS WEIER \
      WGRPH WP WUTSET XALG XDPOLY XDPOLYF XEXPPKG XFALG \
      XF XHASHTBL XML XMLAT XMLEL XPFACT XPOLYC XPOLY XPR XRPOLY \
      YSTREAM ZDSOLVE ZLINDEP ZMOD

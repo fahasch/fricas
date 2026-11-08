@@ -230,6 +230,7 @@ JFriCAS: Exports == Implementation where
                   "MathML",_
                   "TeXmacs",_
                   "TeX",_
+                  "Svg",_
                   "KeyedMsg"] | f = key repeat return sayMarker(markertype, 0)
         void()
 
@@ -403,6 +404,8 @@ JFriCAS: Exports == Implementation where
                 content_type := "text/latex"
             else if member?(f, ["MathML", "HTML"]) then
                 content_type := "text/html"
+            else if f = "Svg" then -- from svg$ViewportExport
+                content_type := "image/svg+xml"
             else if f = "TeX" then
                 content_type := "text/latex"
                 content := jsonEscapeString concat [_
